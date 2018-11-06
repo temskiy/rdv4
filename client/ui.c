@@ -183,6 +183,7 @@ void PrintAndLog(char *fmt, ...) {
 
 void SetLogFilename(char *fn) {
 	logfilename = fn;
+	printf("\e[32mLogFileName: %s \e[0m", fn);
 }
  
 void SetFlushAfterWrite(bool value) {

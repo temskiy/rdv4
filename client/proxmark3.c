@@ -250,7 +250,7 @@ static void show_help(bool showFullHelp, char *command_line){
 
 int main(int argc, char* argv[]) {
 	srand(time(0));
-  
+	SetLogName ();
 	bool usb_present = false;
 	bool waitCOMPort = false;
 	bool executeCommand = false;
@@ -385,3 +385,15 @@ int main(int argc, char* argv[]) {
 	
 	exit(0);
 }
+void SetLogName (void) {
+	time_t timer = time(NULL);
+	struct tm* aTm = localtime(&timer);
+	char *fName[30];
+	char t[20];
+	strcat(fName,"proxmark3-");
+	sprintf(t,"%04d.%02d.%02d",aTm->tm_year+1900,aTm->tm_mon+1,aTm->tm_mday);	
+	strcat(fName, &t);	
+	strcat(fName,".log");	
+	sprintf(fileName,"%s",fName);
+	SetLogFilename(fileName);
+	}
