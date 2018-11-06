@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include <readline/readline.h>
 #include <readline/history.h>
-
+#include <time.h>
 #include "util_posix.h"
 #include "proxgui.h"
 #include "cmdmain.h"
@@ -27,7 +27,7 @@
 #include "cmdhw.h"
 #include "whereami.h"
 #include "comms.h"
-
+char fileName[30];
 #if defined(__linux__) || (__APPLE__)
 static void showBanner(void){
 	printf("\n\n");
@@ -396,4 +396,4 @@ void SetLogName (void) {
 	strcat(fName,".log");	
 	sprintf(fileName,"%s",fName);
 	SetLogFilename(fileName);
-	}
+}

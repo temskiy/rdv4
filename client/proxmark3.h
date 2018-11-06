@@ -15,7 +15,7 @@
 #include "usb_cmd.h"
 #include "cmdscript.h"  // CmdScriptRun  
 
-#define PROXPROMPT "pm3 --> "
+#define PROXPROMPT "pm3 > "
 
 #ifdef __cplusplus
 extern "C" {
