@@ -416,15 +416,16 @@ void StandAloneMode(void) {
 	
 	DbpString("Stand-alone mode! No PC necessary.");
 	// Oooh pretty -- notify user we're in elite samy mode now
-	LED(LED_RED,	200);
 	LED(LED_ORANGE, 200);
 	LED(LED_GREEN,	200);
-	LED(LED_ORANGE, 200);
 	LED(LED_RED,	200);
-	LED(LED_ORANGE, 200);
+	LED(LED_RED2,	200);
+	LED(LED_RED,	200);
 	LED(LED_GREEN,	200);
 	LED(LED_ORANGE, 200);
+	LED(LED_GREEN,	200);
 	LED(LED_RED,	200);
+	LED(LED_RED2,	200);
 }
 // detection of which Standalone Modes is installed
 // (iceman)
@@ -456,7 +457,9 @@ void printStandAloneModes(void) {
 #if defined(WITH_HF_BOG)
 	DbpString("   HF 14a sniff standalone with ULC/ULEV1/NTAG auth storing in flashmem - aka BogitoRun (Bogito)");
 #endif
-
+#if defined(WITH_LF_EM4100EMUL)
+    DbpString("   LF EM4100 sniff/sim/clone");
+#endif
 	//DbpString("Running ");	
 	//Dbprintf("  Is Device attached to USB| %s", USB_ATTACHED() ? "Yes" : "No"); 
 	//Dbprintf("  Is Device attached to FPC| %s", 0 ? "Yes" : "No"); 
@@ -1529,7 +1532,7 @@ void  __attribute__((noreturn)) AppMain(void) {
 * All standalone mod "main loop" should be the RunMod() function.
 * Since the standalone is either LF or HF, the somewhat bisarr defines below exists. 
 */			
-#if defined (WITH_LF) && ( defined (WITH_LF_SAMYRUN) || defined (WITH_LF_HIDBRUTE) || defined (WITH_LF_PROXBRUTE) )
+#if defined (WITH_LF) && ( defined (WITH_LF_SAMYRUN) || defined (WITH_LF_HIDBRUTE) || defined (WITH_LF_PROXBRUTE) || defined (WITH_LF_EM4100EMUL))
 			RunMod();
 #endif
 		

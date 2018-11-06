@@ -24,8 +24,9 @@ APP_CFLAGS = -DWITH_CRC \
 			 -DWITH_FLASH \
 			 -DWITH_SMARTCARD \
 			 -DWITH_HFSNOOP \
-			 -DWITH_LF_SAMYRUN \
+			 -DWITH_LF_EM4100EMUL \
 			 -DWITH_FPC \
+			 -DWITH_EMV \
 			 -fno-strict-aliasing -ffunction-sections -fdata-sections
 
 ### IMPORTANT -  move the commented variable below this line
@@ -43,7 +44,7 @@ APP_CFLAGS = -DWITH_CRC \
 #			 -DWITH_HF_MATTYRUN
 #			 -DWITH_HF_COLIN
 #			 -DWITH_HF_BOG
-
+#			 -DWITH_LF_EM4100EMUL
 
 SRC_LCD = fonts.c LCD.c
 SRC_LF = lfops.c hitag2.c hitagS.c lfsampling.c pcf7931.c lfdemod.c
