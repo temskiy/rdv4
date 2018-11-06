@@ -1532,7 +1532,7 @@ void  __attribute__((noreturn)) AppMain(void) {
 * All standalone mod "main loop" should be the RunMod() function.
 * Since the standalone is either LF or HF, the somewhat bisarr defines below exists. 
 */			
-#if defined (WITH_LF) && ( defined (WITH_LF_SAMYRUN) || defined (WITH_LF_HIDBRUTE) || defined (WITH_LF_PROXBRUTE) || defined (WITH_LF_EM4100EMUL))
+#if defined (WITH_LF) && ( defined (WITH_LF_SAMYRUN) || defined (WITH_LF_HIDBRUTE) || defined (WITH_LF_PROXBRUTE) || defined (WITH_LF_EM4100EMUL) )
 			RunMod();
 #endif
 		

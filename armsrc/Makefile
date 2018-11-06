@@ -112,7 +112,10 @@ endif
 ifneq (,$(findstring WITH_HF_BOG,$(APP_CFLAGS)))
 	SRC_STANDALONE = hf_bog.c
 endif
-
+# WITH_LF_EM4100EMUL
+ifneq (,$(findstring WITH_LF_EM4100EMUL,$(APP_CFLAGS)))
+	SRC_STANDALONE = lf_em4100emul.c
+endif
 #the FPGA bitstream files. Note: order matters!
 FPGA_BITSTREAMS = fpga_lf.bit fpga_hf.bit
 
