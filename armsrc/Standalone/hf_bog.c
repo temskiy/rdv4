@@ -15,7 +15,8 @@ The retrieved sniffing session can be acquired by connecting the device
 to a client that supports the reconnect capability and issue 'hf 14a list'.
 
 In order to view the grabbed authentication attempts in the flash mem,
-you can simply 'mem read l 256' from the client to view the stored quadlets.
+you can simply run 'script run read_pwd_mem' or just 'mem read l 256' 
+from the client to view the stored quadlets.
 */
 
 #include "hf_bog.h"
@@ -31,7 +32,7 @@ uint8_t FindOffsetInFlash() {
 	uint8_t eom[4] = { 0xFF, 0xFF, 0xFF, 0xFF };
 	uint8_t memcnt = 0;
 	
-	while (memcnt < 4096)
+	while (memcnt < 0xFF)
 	{
 		Flash_ReadData(memcnt, mem, 4);
 		if (memcmp(mem, eom, 4) == 0) {
@@ -43,8 +44,7 @@ uint8_t FindOffsetInFlash() {
 	return 0; // wrap-around
 }
 
-void EraseMemory()
-{
+void EraseMemory() {
     if (!FlashInit()){
         return;
     }
@@ -58,9 +58,8 @@ void EraseMemory()
 	SpinDelay(100);
 }
 
+// This is actually copied from SniffIso14443a
 void RAMFUNC SniffAndStore(uint8_t param) {
-	
-	/* This is actually copied from SniffIso14443a */
 	
 	iso14443a_setup(FPGA_HF_ISO14443A_SNIFFER);
 	
@@ -240,10 +239,20 @@ void RAMFUNC SniffAndStore(uint8_t param) {
 		uint8_t memoffset = FindOffsetInFlash();
 		if (MF_DBGLEVEL > 1) Dbprintf("[!] Memory offset = %u", memoffset);
 		
+		if ((memoffset + 4 * auth_attempts) > 0xFF)
+		{
+			// We opt to keep the new data only
+			memoffset = 0;
+			if (MF_DBGLEVEL > 1) Dbprintf("[!] Size of total data > 256 bytes. Discarding the old data.");
+		}
+		
 		// Get previous data from flash mem
 		uint8_t *previousdata = BigBuf_malloc(memoffset);
-		uint16_t readlen = Flash_ReadData(0, previousdata, memoffset);
-		if (MF_DBGLEVEL > 1) Dbprintf("[!] Read %u bytes from flash mem", readlen);
+		if (memoffset > 0)
+		{
+			uint16_t readlen = Flash_ReadData(0, previousdata, memoffset);
+			if (MF_DBGLEVEL > 1) Dbprintf("[!] Read %u bytes from flash mem", readlen);
+		}
 				
 		// create new bigbuf to hold all data
 		size_t total_size = memoffset + 4 * auth_attempts;
@@ -257,10 +266,7 @@ void RAMFUNC SniffAndStore(uint8_t param) {
 		
 		// Erase first page of flash mem
 		EraseMemory();
-		
-		//for (int i=0; i<memoffset + 4 * auth_attempts; i++)
-		//	if (MF_DBGLEVEL > 1) Dbprintf("[-] total_data[%d] = 0x%02x", i, total_data[i]);
-		
+				
 		// Write total data to flash mem
 		uint16_t writelen = Flash_WriteData(0, total_data, memoffset + 4 * auth_attempts);
 		if (MF_DBGLEVEL > 1) Dbprintf("[!] Wrote %u bytes into flash mem", writelen);
@@ -272,18 +278,23 @@ void RAMFUNC SniffAndStore(uint8_t param) {
 	}
 }
 
-void RunMod()
-{
-	Dbprintf("Sniffing started");
+void RunMod() {
 	
-    	SpinDelay(200);
+	Dbprintf(">>  Bogiton 14a Sniff UL/UL-EV1/NTAG a.k.a BogitoRun Started  <<");
+	Dbprintf("Starting to sniff");
+	
+	SpinDown(50);
+    SpinOff(50);
+    SpinUp(50);
+    SpinOff(50);
+    SpinDown(50);
+	SpinDelay(500);
 	
 	// param:
 	// bit 0 - trigger from first card answer
 	// bit 1 - trigger from first reader 7-bit request	
-	SniffAndStore(0);
-	
-	LEDsoff();
-	
+	SniffAndStore(0);	
+	LEDsoff();	
 	SpinDelay(300);
+	Dbprintf("- [ End ] -> You can take shell back ...");
 }

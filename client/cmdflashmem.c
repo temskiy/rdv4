@@ -9,8 +9,8 @@
 //-----------------------------------------------------------------------------
 #include "cmdflashmem.h"
 
-#include "rsa.h"
-#include "sha1.h"
+#include "mbedtls/rsa.h"
+#include "mbedtls/sha1.h"
 
 #define MCK 48000000
 //#define FLASH_BAUD 24000000
@@ -151,20 +151,16 @@ int CmdFlashmemSpiBaudrate(const char *Cmd) {
 
 int CmdFlashMemLoad(const char *Cmd){
 
-	FILE *f;
-	char filename[FILE_PATH_SIZE] = {0};	
-	uint8_t cmdp = 0;
-	bool errors = false;
 	uint32_t start_index = 0;
+	char filename[FILE_PATH_SIZE] = {0};	
+	bool errors = false;
+	uint8_t cmdp = 0;
 	
 	while (param_getchar(Cmd, cmdp) != 0x00 && !errors) {
 		switch (tolower(param_getchar(Cmd, cmdp))) {
-		case 'o':
-			start_index = param_get32ex(Cmd, cmdp+1, 0, 10);
-			cmdp += 2;
-			break;
+		case 'h':
+			return usage_flashmem_load();
 		case 'f':
-			//File handling and reading
 			if ( param_getstr(Cmd, cmdp+1, filename, FILE_PATH_SIZE) >= FILE_PATH_SIZE ) {
 				PrintAndLogEx(FAILED, "Filename too long");
 				errors = true;
@@ -172,8 +168,10 @@ int CmdFlashMemLoad(const char *Cmd){
 			}			
 			cmdp += 2;			
 			break;
-		case 'h':
-			return usage_flashmem_load();
+		case 'o':
+			start_index = param_get32ex(Cmd, cmdp+1, 0, 10);
+			cmdp += 2;
+			break;	
 		default:
 			PrintAndLogEx(WARNING, "Unknown parameter '%c'", param_getchar(Cmd, cmdp));
 			errors = true;
@@ -183,52 +181,32 @@ int CmdFlashMemLoad(const char *Cmd){
 	
 	//Validations
 	if (errors || cmdp == 0 ) return usage_flashmem_load();			
-
-	// load file
-	f = fopen(filename, "rb");
-	if ( !f ){
-		PrintAndLogEx(FAILED, "File: %s: not found or locked.", filename);
-		return 1;
-	}	
 	
-	// get filesize in order to malloc memory
-	fseek(f, 0, SEEK_END);
-	long fsize = ftell(f);
-	fseek(f, 0, SEEK_SET);
-
-	if (fsize < 0) 	{
-		PrintAndLogDevice(WARNING, "error, when getting filesize");
-		fclose(f);
+	uint8_t *data = NULL;
+	size_t datalen = 0;
+	int res = loadFile(filename, "bin", &data, &datalen);
+	//int res = loadFileEML( filename, "eml", data, &datalen);
+	if ( res ) {
+		free(data);
 		return 1;
 	}
 	
-	if (fsize > FLASH_MEM_MAX_SIZE) {
+	if (datalen > FLASH_MEM_MAX_SIZE) {
 		PrintAndLogDevice(WARNING, "error, filesize is larger than available memory");
-		fclose(f);
+		free(data);
 		return 1;
 	}
 
-	uint8_t *dump = calloc(fsize, sizeof(uint8_t));
-	if (!dump) {
-		PrintAndLogDevice(WARNING, "error, cannot allocate memory ");
-		fclose(f);
-		return 1;
-	}
-	
-	size_t bytes_read = fread(dump, 1, fsize, f);
-	if (f)
-		fclose(f);
-	
 	//Send to device
 	uint32_t bytes_sent = 0;
-	uint32_t bytes_remaining = bytes_read;
+	uint32_t bytes_remaining = datalen;
 
 	while (bytes_remaining > 0){
 		uint32_t bytes_in_packet = MIN(FLASH_MEM_BLOCK_SIZE, bytes_remaining);
 		
 		UsbCommand c = {CMD_FLASHMEM_WRITE, {start_index + bytes_sent, bytes_in_packet, 0}};
 				
-		memcpy(c.d.asBytes, dump + bytes_sent, bytes_in_packet);
+		memcpy(c.d.asBytes, data + bytes_sent, bytes_in_packet);
 		clearCommandBuffer();
 		SendCommand(&c);
 
@@ -238,7 +216,7 @@ int CmdFlashMemLoad(const char *Cmd){
 		UsbCommand resp;
 		if ( !WaitForResponseTimeout(CMD_ACK, &resp, 2000) ) {
 			PrintAndLogEx(WARNING, "timeout while waiting for reply.");
-			free(dump);
+			free(data);
 			return 1;
 		}
 		
@@ -247,9 +225,9 @@ int CmdFlashMemLoad(const char *Cmd){
 			PrintAndLogEx(FAILED, "Flash write fail [offset %u]", bytes_sent);
 		
 	}
-	free(dump);
+	free(data);
 	
-	PrintAndLogEx(SUCCESS, "Wrote %u bytes to offset %u", bytes_read, start_index);
+	PrintAndLogEx(SUCCESS, "Wrote %u bytes to offset %u", datalen, start_index);
 	return 0;
 }
 int CmdFlashMemSave(const char *Cmd){
@@ -358,7 +336,7 @@ int CmdFlashMemWipe(const char *Cmd){
 int CmdFlashMemInfo(const char *Cmd){
 
 	uint8_t sha_hash[20] = {0};
-	rsa_context rsa;
+	mbedtls_rsa_context rsa;
 	
 	uint8_t cmdp = 0;
 	bool errors = false,  shall_write = false, shall_sign = false;
@@ -404,7 +382,7 @@ int CmdFlashMemInfo(const char *Cmd){
 	memcpy(&mem, (rdv40_validation_t *)resp.d.asBytes, sizeof(rdv40_validation_t));
 
 	// Flash ID hash (sha1)
-	sha1( mem.flashid, sizeof(mem.flashid), sha_hash );
+	mbedtls_sha1( mem.flashid, sizeof(mem.flashid), sha_hash );
 	
 	// print header
 	PrintAndLogEx(INFO, "\n--- Flash memory Information ---------");
@@ -471,22 +449,22 @@ int CmdFlashMemInfo(const char *Cmd){
 				
 #define KEY_LEN 128
 
-	rsa_init(&rsa, RSA_PKCS_V15, 0);
+	mbedtls_rsa_init(&rsa, MBEDTLS_RSA_PKCS_V15, 0);
 
 	rsa.len = KEY_LEN;
 
-	mpi_read_string( &rsa.N , 16, RSA_N  );
-	mpi_read_string( &rsa.E , 16, RSA_E  );
-	mpi_read_string( &rsa.D , 16, RSA_D  );
-	mpi_read_string( &rsa.P , 16, RSA_P  );
-	mpi_read_string( &rsa.Q , 16, RSA_Q  );
-	mpi_read_string( &rsa.DP, 16, RSA_DP );
-	mpi_read_string( &rsa.DQ, 16, RSA_DQ );
-	mpi_read_string( &rsa.QP, 16, RSA_QP );
+	mbedtls_mpi_read_string( &rsa.N , 16, RSA_N  );
+	mbedtls_mpi_read_string( &rsa.E , 16, RSA_E  );
+	mbedtls_mpi_read_string( &rsa.D , 16, RSA_D  );
+	mbedtls_mpi_read_string( &rsa.P , 16, RSA_P  );
+	mbedtls_mpi_read_string( &rsa.Q , 16, RSA_Q  );
+	mbedtls_mpi_read_string( &rsa.DP, 16, RSA_DP );
+	mbedtls_mpi_read_string( &rsa.DQ, 16, RSA_DQ );
+	mbedtls_mpi_read_string( &rsa.QP, 16, RSA_QP );
 
 	PrintAndLogEx(INFO, "KEY length   | %d", KEY_LEN);
 		
-	bool is_keyok = ( rsa_check_pubkey(  &rsa ) == 0 || rsa_check_privkey( &rsa ) == 0 );
+	bool is_keyok = ( mbedtls_rsa_check_pubkey(  &rsa ) == 0 || mbedtls_rsa_check_privkey( &rsa ) == 0 );
 	if (is_keyok)
 		PrintAndLogEx(SUCCESS, "RSA key validation ok");
 	else
@@ -505,7 +483,7 @@ int CmdFlashMemInfo(const char *Cmd){
 	// Signing (private key)
 	if (shall_sign) {
 			
-		int is_signed = rsa_pkcs1_sign( &rsa, NULL, NULL, RSA_PRIVATE, SIG_RSA_SHA1, 20, sha_hash, sign );
+		int is_signed = mbedtls_rsa_pkcs1_sign( &rsa, NULL, NULL, MBEDTLS_RSA_PRIVATE, MBEDTLS_MD_SHA1, 20, sha_hash, sign );
 		if (is_signed == 0) 
 			PrintAndLogEx(SUCCESS, "RSA Signing ok");
 		else
@@ -533,13 +511,13 @@ int CmdFlashMemInfo(const char *Cmd){
 	}
 	
 	// Verify (public key)
-	int is_verified = rsa_pkcs1_verify( &rsa, RSA_PUBLIC, SIG_RSA_SHA1, 20, sha_hash, from_device );
+	int is_verified = mbedtls_rsa_pkcs1_verify( &rsa, NULL, NULL, MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA1, 20, sha_hash, from_device );
 	if (is_verified == 0)
 		PrintAndLogEx(SUCCESS, "RSA Verification ok");
 	else
 		PrintAndLogEx(FAILED, "RSA Verification failed");
 
-	rsa_free(&rsa);
+	mbedtls_rsa_free(&rsa);
 	return 0;
 }
 
