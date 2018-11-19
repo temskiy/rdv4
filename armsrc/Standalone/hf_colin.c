@@ -210,12 +210,14 @@ void WriteTagToFlash(uint8_t index, size_t size)
 
 void RunMod()
 {
+	StandAloneMode();
+    FpgaDownloadAndGo(FPGA_BITSTREAM_HF);
+	
     currline = 20;
     curlline = 20;
     currfline = 24;
     memset(cjuid, 0, sizeof(cjuid));
     cjcuid = 0;
-    FpgaDownloadAndGo(FPGA_BITSTREAM_HF);
     uint8_t sectorsCnt = (MF1KSZ / MF1KSZSIZE);
     uint64_t key64;           // Defines current key
     uint8_t *keyBlock = NULL; // Where the keys will be held in memory.
@@ -348,12 +350,6 @@ ACCBITS : 796788[00]+VALUE
     currfline = 24;
     cjSetCursLeft();
 
-    SpinDown(50);
-    SpinOff(50);
-    SpinUp(50);
-    SpinOff(50);
-    SpinDown(50);
-
 failtag:
 
     vtsend_cursor_position_save(NULL);
@@ -469,8 +465,8 @@ failtag:
             else
             {
                 /*  BRACE YOURSELF : AS LONG AS WE TRAP A KNOWN KEY, WE STOP CHECKING AND ENFORCE KNOWN SCHEMES */
-                // uint8_t tosendkey[12];
-                char tosendkey[12];
+                // uint8_t tosendkey[13];
+                char tosendkey[13];
                 num_to_bytes(key64, 6, foundKey[type][sec]);
                 cjSetCursRight();
                 DbprintfEx(FLAG_NOLOG, "SEC: %02x ; KEY : %012" PRIx64 " ; TYP: %i", sec, key64, type);
