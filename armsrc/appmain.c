@@ -426,12 +426,18 @@ void StandAloneMode(void) {
 	LED(LED_GREEN,	200);
 	LED(LED_RED,	200);
 	LED(LED_RED2,	200);
+	SpinDown(50);
+        SpinOff(50);
+        SpinUp(50);
+        SpinOff(50);
+        SpinDown(50);
+	SpinDelay(500);
 }
 // detection of which Standalone Modes is installed
 // (iceman)
 void printStandAloneModes(void) {
 
-	DbpString("Installed StandAlone Mods");
+	DbpString("Installed StandAlone Mode");
 	
 #if defined(WITH_LF_ICERUN)
 	DbpString("   LF sniff/clone/simulation -  aka IceRun (iceman)");
@@ -446,7 +452,7 @@ void printStandAloneModes(void) {
 	DbpString("   LF HID ProxII bruteforce - aka Proxbrute (Brad Antoniewicz)");
 #endif 
 #if defined(WITH_LF_HIDBRUTE)
-	DbpString("   LF HID corporate 1000 bruteforce - (Federico dotta & Maurizio Agazzini)");
+	DbpString("   LF HID corporate 1000 bruteforce - aka Corporatebrute (Federico dotta & Maurizio Agazzini)");
 #endif 
 #if defined(WITH_HF_MATTYRUN)
 	DbpString("   HF Mifare sniff/clone - aka MattyRun (Matías A. Ré Medina)");
@@ -1086,26 +1092,28 @@ void UsbPacketReceived(uint8_t *packet, int len) {
 			static const char* welcome = "Proxmark3 Serial interface ready\n";
 			strncat(dest, welcome, sizeof(dest) - strlen(dest) - 1);
 			
-			sprintf(dest + strlen(dest) - 1, "Arg0  | 0x%" PRIx64 " \n", c->arg[0]);
-			sprintf(dest + strlen(dest) - 1, "Arg1  | 0x%" PRIx64 " \n", c->arg[1]);
-			sprintf(dest + strlen(dest) - 1, "Arg2  | 0x%" PRIx64 " \n", c->arg[2]);
-			sprintf(dest + strlen(dest) - 1, "bytes | 0x%02x 0x%02x 0x%02x 0x%02x \n"
+			sprintf(dest + strlen(dest) - 1, "| Arg0 0x%" PRIx64 " \n", c->arg[0]);
+			sprintf(dest + strlen(dest) - 1, "| Arg1 0x%" PRIx64 " \n", c->arg[1]);
+			sprintf(dest + strlen(dest) - 1, "| Arg2 0x%" PRIx64 " \n", c->arg[2]);
+			sprintf(dest + strlen(dest) - 1, "| bytes 0x%02x 0x%02x 0x%02x 0x%02x \n"
 						,c->d.asBytes[0], c->d.asBytes[1], c->d.asBytes[2], c->d.asBytes[3]);
 			
-/*
+
 			UsbCommand txcmd;
 			for (size_t i=0; i < sizeof(UsbCommand); i++)
 				((uint8_t*)&txcmd)[i] = 0x00;
 
 			// Compose the outgoing command frame
 			txcmd.cmd = CMD_DEBUG_PRINT_STRING;
-			txcmd.arg[0] = len;
+			txcmd.arg[0] = strlen(dest);
 			txcmd.arg[1] = 0;	
 			txcmd.arg[2] = 0;
 			memcpy(txcmd.d.asBytes, dest, USB_CMD_DATA_SIZE);		
+
+			usart_init();			
 			usart_writebuffer((uint8_t*)&txcmd, sizeof(UsbCommand));
-*/
-			DbpString("Starting to listen");
+
+			DbpString("Justs send to usart");
 			LED_A_ON();
 			/*
 			uint8_t rx[sizeof(UsbCommand)];
@@ -1116,7 +1124,7 @@ void UsbPacketReceived(uint8_t *packet, int len) {
 					DbpString("got 544");
 			}
 			*/
-			cmd_send(CMD_DEBUG_PRINT_STRING, strlen(dest), 0, 0, dest, strlen(dest));
+			//cmd_send(CMD_DEBUG_PRINT_STRING, strlen(dest), 0, 0, dest, strlen(dest));
 			//DbpString("finished");
 			LED_A_OFF();
 			cmd_send(CMD_ACK,0,0,0,0,0);
@@ -1202,7 +1210,6 @@ void UsbPacketReceived(uint8_t *packet, int len) {
 			// arg0 = startindex
 			// arg1 = length bytes to transfer
 			// arg2 = RFU
-			//Dbprintf("transfer to client parameters: %" PRIu32 " | %" PRIu32 " | %" PRIu32, startidx, numofbytes, c->arg[2]);
 
 			for (size_t i = 0; i < numofbytes; i += USB_CMD_DATA_SIZE) {
 				len = MIN((numofbytes - i), USB_CMD_DATA_SIZE);
@@ -1237,7 +1244,6 @@ void UsbPacketReceived(uint8_t *packet, int len) {
   			if (!FlashInit()) {
    		       break;
   		    }
-			//Flash_CheckBusy(BUSY_TIMEOUT);
 			
 			for(size_t i = 0; i < len; i += size) {
 				len = MIN((len - i), size);

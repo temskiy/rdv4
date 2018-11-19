@@ -2392,10 +2392,10 @@ int CmdHF14AMfucSetUid(const char *Cmd){
 int CmdHF14AMfuGenDiverseKeys(const char *Cmd){
 
 	uint8_t uid[4];	
-	char cmdp = param_getchar(Cmd, 0);
-	if (strlen(Cmd) == 0  || cmdp == 'h' || cmdp == 'H') return usage_hf_mfu_gendiverse();
+	char cmdp = tolower(param_getchar(Cmd, 0));
+	if (strlen(Cmd) == 0  || cmdp == 'h') return usage_hf_mfu_gendiverse();
 
-	if ( cmdp == 'r' || cmdp == 'R') {
+	if ( cmdp == 'r' ) {
 			// read uid from tag
 		UsbCommand c = {CMD_READER_ISO_14443a, {ISO14A_CONNECT | ISO14A_NO_RATS, 0, 0}};
 		clearCommandBuffer();
@@ -2441,11 +2441,11 @@ int CmdHF14AMfuGenDiverseKeys(const char *Cmd){
 	mix[6] = block ^ uid[2];
 	mix[7] = uid[3];
 	
-	des3_context ctx = { 0x00 };
-	des3_set2key_enc(&ctx, masterkey);
+	mbedtls_des3_context ctx;
+	mbedtls_des3_set2key_enc(&ctx, masterkey);
 
-	des3_crypt_cbc(&ctx  // des3_context
-		, DES_ENCRYPT    // int mode
+	mbedtls_des3_crypt_cbc(&ctx  // des3_context
+		, MBEDTLS_DES_ENCRYPT    // int mode
 		, sizeof(mix)    // length
 		, iv             // iv[8]
 		, mix            // input
@@ -2478,10 +2478,10 @@ int CmdHF14AMfuGenDiverseKeys(const char *Cmd){
 	memcpy(dmkey+16, dkeyA, 8);
 	memset(iv, 0x00, 8);
 	
-	des3_set3key_enc(&ctx, dmkey);
+	mbedtls_des3_set3key_enc(&ctx, dmkey);
 
-	des3_crypt_cbc(&ctx  // des3_context
-		, DES_ENCRYPT    // int mode
+	mbedtls_des3_crypt_cbc(&ctx  // des3_context
+		, MBEDTLS_DES_ENCRYPT    // int mode
 		, sizeof(newpwd) // length
 		, iv             // iv[8]
 		, zeros         // input
@@ -2501,11 +2501,11 @@ int CmdHF14AMfuGenDiverseKeys(const char *Cmd){
 int CmdHF14AMfuPwdGen(const char *Cmd){
 	
 	uint8_t uid[7] = {0x00};	
-	char cmdp = param_getchar(Cmd, 0);
-	if (strlen(Cmd) == 0  || cmdp == 'h' || cmdp == 'H') return usage_hf_mfu_pwdgen();
-	if (cmdp == 't' || cmdp == 'T') return 	ul_ev1_pwdgen_selftest();
+	char cmdp = tolower(param_getchar(Cmd, 0));
+	if (strlen(Cmd) == 0  || cmdp == 'h') return usage_hf_mfu_pwdgen();
+	if (cmdp == 't') return ul_ev1_pwdgen_selftest();
 	
-	if ( cmdp == 'r' || cmdp == 'R') {
+	if ( cmdp == 'r') {
 			// read uid from tag
 		UsbCommand c = {CMD_READER_ISO_14443a, {ISO14A_CONNECT | ISO14A_NO_RATS, 0, 0}};
 		clearCommandBuffer();

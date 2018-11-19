@@ -23,6 +23,7 @@ APP_CFLAGS = -DWITH_CRC \
 			 -DWITH_FELICA \
 			 -DWITH_FLASH \
 			 -DWITH_SMARTCARD \
+			 -DWITH_FPC \
 			 -DWITH_HFSNOOP \
 			 -DWITH_LF_EM4100EMUL \
 			 -DWITH_FPC \
@@ -32,7 +33,6 @@ APP_CFLAGS = -DWITH_CRC \
 ### IMPORTANT -  move the commented variable below this line
 #			 -DWITH_LCD \
 #			 -DWITH_EMV \
-#			 -DWITH_FPC \
 #
 # Standalone Mods
 #-------------------------------------------------------
@@ -41,7 +41,7 @@ APP_CFLAGS = -DWITH_CRC \
 #			 -DWITH_LF_PROXBRUTE
 #			 -DWITH_LF_HIDBRUTE
 #			 -DWITH_HF_YOUNG
-#			 -DWITH_HF_MATTYRUN
+#			 -DWITH_HF_MATTYRUN -
 #			 -DWITH_HF_COLIN
 #			 -DWITH_HF_BOG
 #			 -DWITH_LF_EM4100EMUL
