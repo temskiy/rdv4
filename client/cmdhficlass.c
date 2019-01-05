@@ -2290,7 +2290,6 @@ int CmdHFiClassLookUp(const char *Cmd) {
 
 	t1 = msclock() - t1;
 	PrintAndLogEx(NORMAL, "\nTime in iclass : %.0f seconds\n", (float)t1/1000.0);
-	DropField();
 	free(prekey);
 	free(keyBlock);
 	PrintAndLogEx(NORMAL, "");		
@@ -2317,7 +2316,8 @@ int LoadDictionaryKeyFile( char* filename, uint8_t **keys, int *keycnt) {
 		while (fgetc(f) != '\n' && !feof(f)) {}; 
 		
 		//The line start with # is comment, skip		
-		if( buf[0]=='#' ) continue;
+		if( buf[0]=='#' ) 
+			continue;
 
 		// doesn't this only test first char only?
 		if (!isxdigit(buf[0])){
@@ -2330,7 +2330,7 @@ int LoadDictionaryKeyFile( char* filename, uint8_t **keys, int *keycnt) {
 
 		p = realloc(*keys, 8 * (keyitems += 64));
 		if (!p) {
-			PrintAndLogEx(NORMAL, _RED_([!])" cannot allocate memory for default keys");
+			PrintAndLogEx(ERR, "cannot allocate memory for default keys");
 			fclose(f);
 			return 2;
 		}
@@ -2342,7 +2342,7 @@ int LoadDictionaryKeyFile( char* filename, uint8_t **keys, int *keycnt) {
 		memset(buf, 0, sizeof(buf));
 	}
 	fclose(f);
-	PrintAndLogEx(NORMAL, _BLUE_([+]) "Loaded " _GREEN_(%2d) " keys from %s", *keycnt, filename);	
+	PrintAndLogEx(SUCCESS, "Loaded " _GREEN_(%2d) " keys from %s", *keycnt, filename);
 	return 0;
 }
 
@@ -2527,7 +2527,7 @@ static command_t CommandTable[] = {
 	{"encryptblk",  CmdHFiClassEncryptBlk,     	1,	"<BlockData> Encrypt given block data"},
 	{"list",        CmdHFiClassList,           	0,	"            (Deprecated) List iClass history"},
 	{"loclass",     CmdHFiClass_loclass,       	1,	"[options..] Use loclass to perform bruteforce of reader attack dump"},
-	{"lookup",		CmdHFiClassLookUp,     		0,	"[options..] Uses authentication trace to check for key in dictionary file"},
+	{"lookup",		CmdHFiClassLookUp,     		1,	"[options..] Uses authentication trace to check for key in dictionary file"},
 	{"managekeys",  CmdHFiClassManageKeys,     	1,	"[options..] Manage the keys to use with iClass"},
 	{"permutekey",  CmdHFiClassPermuteKey,		0,	"            Permute function from 'heart of darkness' paper"},
 	{"readblk",     CmdHFiClass_ReadBlock,      0,	"[options..] Authenticate and Read iClass block"},

@@ -280,10 +280,19 @@ static int l_CmdConsole(lua_State *L) {
 }
 
 static int l_iso15693_crc(lua_State *L) {
-    size_t size;
-    const char *v = luaL_checklstring(L, 1, &size);
-	// iceman, should be size / 2 ?!?
-    lua_pushunsigned(L, crc( CRC_15693, (uint8_t *) v, size));
+	uint32_t tmp;
+	unsigned char buf[USB_CMD_DATA_SIZE] = {0x00};
+    size_t size = 0;	
+    const char *data = luaL_checklstring(L, 1, &size);
+	
+	for (int i = 0; i < size; i += 2) {
+		sscanf(&data[i], "%02x", &tmp);
+		buf[i / 2] = tmp & 0xFF;
+	}
+	
+	size /= 2;	
+	compute_crc(CRC_15693, buf, size, &buf[size], &buf[size+1]);	
+    lua_pushlstring(L, (const char *)&buf, size+2);
     return 1;
 }
 
@@ -506,7 +515,7 @@ static int l_sha1(lua_State *L) {
 static int l_reveng_models(lua_State *L){
 
 // This array needs to be adjusted if RevEng adds more crc-models.
-#define NMODELS 103
+#define NMODELS 105
 
 	int count = 0;
 	uint8_t in_width = luaL_checkunsigned(L, 1);

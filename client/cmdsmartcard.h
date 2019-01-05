@@ -21,9 +21,10 @@
 #include "common.h"
 #include "util.h"
 #include "loclass/fileutils.h"	// saveFile
-#include "comms.h"			// getfromdevice
+#include "comms.h"				// getfromdevice
 #include "emv/emvcore.h"		// decodeTVL
 #include "emv/apduinfo.h"		// APDUcode description
+#include "emv/dump.h"			// dump_buffer
 
 extern int CmdSmartcard(const char *Cmd);
 
@@ -31,6 +32,8 @@ extern int CmdSmartRaw(const char* cmd);
 extern int CmdSmartUpgrade(const char* cmd);
 extern int CmdSmartInfo(const char* cmd);
 extern int CmdSmartReader(const char *Cmd);
+
+extern int ExchangeAPDUSC(uint8_t *datain, int datainlen, bool activateCard, bool leaveSignalON, uint8_t *dataout, int maxdataoutlen, int *dataoutlen);
 
 extern int usage_sm_raw(void);
 extern int usage_sm_reader(void);

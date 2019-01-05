@@ -138,13 +138,13 @@ int mfCheckKeys(uint8_t blockNo, uint8_t keyType, bool clear_trace, uint8_t keyc
 // 1 == 
 // 2 == Time-out, aborting
 int mfCheckKeys_fast( uint8_t sectorsCnt, uint8_t firstChunk, uint8_t lastChunk, uint8_t strategy,
-						uint32_t size, uint8_t *keyBlock, sector_t *e_sector) {
+						uint32_t size, uint8_t *keyBlock, sector_t *e_sector, bool use_flashmemory) {
 
 	uint64_t t2 = msclock();
 	uint32_t timeout = 0;
 
 	// send keychunk		
-	UsbCommand c = {CMD_MIFARE_CHKKEYS_FAST, { (sectorsCnt | (firstChunk << 8) | (lastChunk << 12) ), strategy, size}};	
+	UsbCommand c = {CMD_MIFARE_CHKKEYS_FAST, { (sectorsCnt | (firstChunk << 8) | (lastChunk << 12) ), ((use_flashmemory << 8) | strategy), size}};	
 	memcpy(c.d.asBytes, keyBlock, 6 * size);
 	clearCommandBuffer();
 	SendCommand(&c);
@@ -166,7 +166,7 @@ int mfCheckKeys_fast( uint8_t sectorsCnt, uint8_t firstChunk, uint8_t lastChunk,
 	// time to convert the returned data.
 	uint8_t curr_keys = resp.arg[0];
 
-	PrintAndLogEx(NORMAL, "\n[-] Chunk: %.1fs | found %u/%u keys (%u)", (float)(t2/1000.0), curr_keys, (sectorsCnt<<1), size);
+	PrintAndLogEx(SUCCESS, "\nChunk: %.1fs | found %u/%u keys (%u)", (float)(t2/1000.0), curr_keys, (sectorsCnt<<1), size);
 		
 	// all keys?		
 	if ( curr_keys == sectorsCnt*2 || lastChunk ) {
