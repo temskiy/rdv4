@@ -20,7 +20,7 @@
 #include <readline/readline.h>
 #include <pthread.h>
 #include <math.h>	
-#include <complex.h>
+#include "/usr/include/complex.h"
 #include "util.h"
 
 #ifndef M_PI
