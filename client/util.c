@@ -212,7 +212,7 @@ void print_hex_break(const uint8_t *data, const size_t len, uint8_t breaks) {
 }
 
 char *sprint_hex(const uint8_t *data, const size_t len) {
-	static char buf[UTIL_BUFFER_SIZE_SPRINT] = {0};
+	static char buf[UTIL_BUFFER_SIZE_SPRINT - 3] = {0};
 	hex_to_buffer((uint8_t *)buf, data, len, sizeof(buf) - 1, 0, 1, true);
 	return buf;
 }
@@ -313,11 +313,11 @@ char *sprint_hex_ascii(const uint8_t *data, const size_t len) {
 	memset(buf, 0x00, UTIL_BUFFER_SIZE_SPRINT);
 	size_t max_len = (len > 1010) ? 1010 : len;
 
-	sprintf(tmp, "%s| ", sprint_hex(data, max_len) );
+	snprintf(tmp, UTIL_BUFFER_SIZE_SPRINT, "%s| ", sprint_hex(data, max_len) );
 	
 	size_t i = 0;
-	size_t pos = (max_len * 3)+2;
-	while(i < max_len){
+	size_t pos = (max_len * 3) + 2;
+	while (i < max_len){
 		char c = data[i];
 		if ( (c < 32) || (c == 127))
 			c = '.';

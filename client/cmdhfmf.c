@@ -894,9 +894,9 @@ int CmdHF14AMfRestore(const char *Cmd) {
 	uint8_t keyB[40][6];
 	uint8_t numSectors = 16;
 	uint8_t cmdp = 0;
-	char keyFilename[FILE_PATH_SIZE]="";	
-	char dataFilename[FILE_PATH_SIZE]="";
-	char szTemp[FILE_PATH_SIZE]="";	
+	char keyFilename[FILE_PATH_SIZE] = "";	
+	char dataFilename[FILE_PATH_SIZE] = "";
+	char szTemp[FILE_PATH_SIZE-20] = "";	
 	char *fptr;
 	FILE *fdump, *fkeys;
 
@@ -905,7 +905,7 @@ int CmdHF14AMfRestore(const char *Cmd) {
 		case 'h':
 			return usage_hf14_restore();
 		case 'u':
-			param_getstr(Cmd, cmdp+1, szTemp, FILE_PATH_SIZE); 
+			param_getstr(Cmd, cmdp+1, szTemp, FILE_PATH_SIZE-20); 
 			if(keyFilename[0]==0x00)
 				snprintf(keyFilename, FILE_PATH_SIZE, "hf-mf-%s-key.bin", szTemp);
 			if(dataFilename[0]==0x00)
@@ -1280,7 +1280,7 @@ int CmdHF14AMfNestedHard(const char *Cmd) {
 	uint8_t trgkey[6] = {0, 0, 0, 0, 0, 0};
 	uint8_t cmdp=0;
 	char filename[FILE_PATH_SIZE], *fptr;
-	char szTemp[FILE_PATH_SIZE];
+	char szTemp[FILE_PATH_SIZE-20];
 	char ctmp;
 	
 	bool know_target_key = false;
@@ -1294,9 +1294,9 @@ int CmdHF14AMfNestedHard(const char *Cmd) {
 		case 'r':
 			fptr = GenerateFilename("hf-mf-","-nonces.bin");
 			if (fptr == NULL) 
-				strncpy(filename,"nonces.bin", FILE_PATH_SIZE);
+				strncpy(filename, "nonces.bin", FILE_PATH_SIZE);
 			else
-				strncpy(filename,fptr, FILE_PATH_SIZE);
+				strncpy(filename, fptr, FILE_PATH_SIZE-1);
 				
 			nonce_file_read = true;
 			if (!param_gethex(Cmd, cmdp+1, trgkey, 12)) {
@@ -1367,16 +1367,16 @@ int CmdHF14AMfNestedHard(const char *Cmd) {
 			fptr = GenerateFilename("hf-mf-","-nonces.bin");
 			if (fptr == NULL) 
 				return 1;
-			strncpy(filename, fptr, FILE_PATH_SIZE);
+			strncpy(filename, fptr, FILE_PATH_SIZE-1);
 			break;
 		case 'u':
-			param_getstr(Cmd, cmdp+1, szTemp, FILE_PATH_SIZE);
+			param_getstr(Cmd, cmdp+1, szTemp, FILE_PATH_SIZE-20);
 			snprintf(filename, FILE_PATH_SIZE, "hf-mf-%s-nonces.bin", szTemp);
 			cmdp++;
 			break;
 		case 'f':
-			param_getstr(Cmd, cmdp+1, szTemp, FILE_PATH_SIZE);
-			strncpy(filename, szTemp, FILE_PATH_SIZE);
+			param_getstr(Cmd, cmdp+1, szTemp, FILE_PATH_SIZE-20);
+			strncpy(filename, szTemp, FILE_PATH_SIZE-20);
 			cmdp++;
 			break;
 		case 'i': 
@@ -2496,7 +2496,7 @@ int CmdHF14AMfESave(const char *Cmd) {
 	blocks = NumOfBlocks(c);
 	bytes = blocks * MFBLOCK_SIZE;	
 
-	dump = calloc(sizeof(uint8_t), bytes);
+	dump = calloc(bytes, sizeof(uint8_t));
 	if (!dump) {
 		PrintAndLogEx(WARNING, "Fail, cannot allocate memory");
 		return 1;

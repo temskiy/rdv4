@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
+ - Change 'lf pcf7931' - improved read code (@sguerrini97)
+ - Change 'hf felica list' - started with some FeliCa annotations (@iceman)
+ - Fix 'hf tune' - now works as expected (@iceman)
+ - Add 'option to use flash memory to upload dictionary files' (RDV40) (@iceman)
+ - Fix 'printing percentage now standard compliant' (@fabled)
+ - Add 'emv roca' - command to test for ROCA vuln in public RSA modulus (@merlokk / @iceman)
  - Added TCP ports support (on linux) (@phcoder)
  - Added HF sniff standalone mode with optional storing of ULC/NTAG/ULEV1 authentication attempts (@bogiton)
  - Fix 'Lining up plot and control window' (@anticat)

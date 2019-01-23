@@ -43,13 +43,14 @@ The new universial GUI will work.
 ## Development
 This fork now compiles just fine on 
    - Windows/mingw environment with Qt5.6.1 & GCC 4.8
-   - Ubuntu 1404, 1510, 1604
+   - Ubuntu 1404, 1510, 1604, 1804
    - Mac OS X / Homebrew
    - Docker container
 
 ## KALI and ARCHLINUX users
 Kali and ArchLinux users usually must kill their modem manager in order for the proxmark3 to enumerate properly.   
-   
+`sudo apt remove modemmanager`
+
 ## Setup and build for UBUNTU
 GC made updates to allow this to build easily on Ubuntu 14.04.2 LTS, 15.10 or 16.04
 See https://github.com/Proxmark/proxmark3/wiki/Ubuntu%20Linux
@@ -60,7 +61,7 @@ I have also added this script to the fork.
 https://github.com/RfidResearchGroup/proxmark3/blob/master/install.sh
 
 - Run
-`sudo apt-get install p7zip git build-essential libreadline5 libreadline-dev libusb-0.1-4 libusb-dev libqt4-dev perl pkg-config wget libncurses5-dev gcc-arm-none-eabi libjansson-dev`
+`sudo apt-get install p7zip git build-essential libreadline5 libreadline-dev libusb-0.1-4 libusb-dev libqt4-dev perl pkg-config wget libncurses5-dev gcc-arm-none-eabi`
 
 - Clone fork
 `git clone https://github.com/RfidResearchGroup/proxmark3.git`
@@ -85,8 +86,11 @@ https://github.com/RfidResearchGroup/proxmark3/blob/master/install.sh
 
 ## Setup and build for ArchLinux
 - Run
-`sudo pacman -Sy base-devel p7zip libusb readline ncurses libjansson-dev arm-none-eabi-newlib --needed`
+`sudo pacman -Sy base-devel p7zip libusb readline ncurses arm-none-eabi-newlib --needed`
 `yaourt -S termcap`
+
+- Remove modemmanager
+`sudo apt remove modemmanager`
 
 - Clone fork
 `git clone https://github.com/RfidResearchGroup/proxmark3.git`
@@ -155,7 +159,7 @@ Links
 - https://github.com/Gator96100/ProxSpace/releases/tag/v2.2   (release v2.2 with gcc v5.3.0 arm-none-eabi-gcc v7.1.0)
 
 
-### 7. Build and run
+### Build and run
 
 - Clone fork
 `git clone https://github.com/RfidResearchGroup/proxmark3.git`
@@ -177,5 +181,106 @@ Assuming you have Proxmark3 Windows drivers installed you can run the Proxmark s
 - Run the client	
 `proxmark3.exe comX`
 
-iceman at host iuse.se
-July 2018, Sweden
+
+## Validating proxmark client functionality
+
+If all went well you should get some information about the firmware and memory usage as well as the prompt,  something like this.
+
+>[=] UART Setting serial baudrate 460800
+>
+>Proxmark3 RFID instrument
+>
+> [ CLIENT ]
+>
+> client: iceman build for RDV40 with flashmem; smartcard;
+>
+> [ ARM ]
+>
+> bootrom: iceman/master/4517531c-dirty-unclean 2018-12-13 15:42:24
+>
+>   os: iceman/master/5a34550a-dirty-unclean 2019-01-07 23:04:07
+>
+> [ FPGA ]
+>
+> LF image built for 2s30vq100 on 2018/ 9/ 8 at 13:57:51
+>
+> HF image built for 2s30vq100 on 2018/ 9/ 3 at 21:40:23
+>
+> [ Hardware ]
+>
+>--= uC: AT91SAM7S512 Rev B
+>
+>--= Embedded Processor: ARM7TDMI
+>
+>--= Nonvolatile Program Memory Size: 512K bytes, Used: 247065 bytes (47%) Free: 277223 bytes (53%)
+>
+>--= Second Nonvolatile Program Memory Size: None
+>
+>--= Internal SRAM Size: 64K bytes
+>
+>--= Architecture Identifier: AT91SAM7Sxx Series
+>
+>--= Nonvolatile Program Memory Type: Embedded Flash Memory
+>
+> pm3 -->
+
+### run the following commands
+    pm3 --> hw status
+    pm3 --> hw version
+    pm3 --> hw tune
+
+You are now ready to use your newly upgraded proxmark3 device.  Many commands uses the **h** parameter to show a help text. The client uses a arcaic command structure which will be hard to grasp at first.  Here are some commands to start off with.
+
+    pm3 --> hf
+    pm3 --> hf 14a info
+    pm3 --> lf
+    pm3 --> lf search
+
+### Quit client
+    pm3 --> quit
+
+
+### First things on your RDV40
+You will need to run these commands to make sure your rdv4 is prepared
+
+    pm3 --> mem load f default_keys m
+    pm3 --> mem load f default_pwd t
+    pm3 --> mem load f default_iclass_keys i
+    pm3 --> lf t55xx deviceconfig a 29 b 17 c 15 d 47 e 15 p
+
+### Verify sim module firmware version
+To make sure you got the latest sim module firmware.
+_Lastest version is v3.10_
+
+    pm3 --> hw status
+
+Find version in the long output,  look for these two lines
+
+    #db# Smart card module (ISO 7816)
+    #db#   version.................v2.06
+
+This version is obselete. The following command upgrades your device sim module firmware.
+Don't not turn of your device during the execution of this command.
+
+    pm3 --> sc upgrade f ../tools/simmodule/SIM010.BIN 
+    
+You get the following output,  this is a successful execution.    
+    
+    [!] WARNING - Smartcard socket firmware upgrade.          
+    [!] A dangerous command, do wrong and you will brick the smart card socket          
+    [+] Smartcard socket firmware uploading to PM3          
+    ..
+    [+] Smartcard socket firmware updating,  don't turn off your PM3!          
+    #db# FW 0000          
+    #db# FW 0080          
+    #db# FW 0100          
+    #db# FW 0180          
+    #db# FW 0200          
+    #db# FW 0280          
+    [+] Smartcard socket firmware upgraded successful        
+    
+
+## the end
+
+`iceman at host iuse.se`
+`July 2018, Sweden`
