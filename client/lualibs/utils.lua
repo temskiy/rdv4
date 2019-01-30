@@ -109,7 +109,19 @@ local Utils =
 		end
 		return nil		
 	end,
-	
+	----ISO15693 CRC
+	Crc15 = function(s)
+		if s == nil then return nil end
+		if #s == 0 then return nil end
+		if  type(s) == 'string' then
+			local utils = require('utils')
+			return utils.ConvertAsciiToHex(
+							core.iso15693_crc(s)
+							)
+		end
+		return nil		
+	end,
+		
 	------------ CRC-8 Legic checksums
 	-- Takes a hex string and calculates a crc8
 	Crc8Legic = function(s)
@@ -245,15 +257,23 @@ local Utils =
 	end,
 	---
 	-- Convert Byte array to string of hex
-	ConvertBytesToHex = function(bytes)
+	ConvertBytesToHex = function(bytes, reverse)
 		if bytes == nil then return '' end
 		if #bytes == 0 then return '' end
 		local s={}
-		for i = 1, #bytes do
-			s[i] = string.format("%02X",bytes[i]) 
+		if reverse then
+			local j=1
+			for i = #bytes, 1, -1 do
+				s[i] = string.format("%02X", bytes[j]) 
+				j = j + 1
+			end
+		else
+			for i = 1, #bytes do
+				s[i] = string.format("%02X", bytes[i]) 
+			end
 		end
 		return table.concat(s)
-	end,	
+	end,		
 	-- Convert byte array to string with ascii
     ConvertBytesToAscii = function(bytes)
 		if bytes == nil then return '' end

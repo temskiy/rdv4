@@ -41,23 +41,26 @@ void PrintAndLogOptions(char *str[][2], size_t size, size_t space) {
 		if (i < size-1)
 			strncat(buff, "\n", sizeof(buff)-strlen(buff) -1);
     }
-    PrintAndLogEx(NORMAL, buff);
+    PrintAndLogEx(NORMAL, "%s", buff);
 }
 void PrintAndLogEx(logLevel_t level, char *fmt, ...) {
 
 	// skip debug messages if client debugging is turned off i.e. 'DATA SETDEBUG 0' 
 	if (g_debugMode	== 0 && level == DEBUG)
 		return;
-	
+
+	char prefix[20] = {0};	
 	char buffer[MAX_PRINT_BUFFER] = {0};
-	char buffer2[MAX_PRINT_BUFFER] = {0};
-	char prefix[20] = {0};
+	char buffer2[MAX_PRINT_BUFFER+20] = {0};
 	char *token = NULL;
 	int size = 0;
 						//   {NORMAL, SUCCESS, INFO, FAILED, WARNING, ERR, DEBUG}
 	static char *prefixes[7] = { "", "[+] ", "[=] ", "[-] ", "[!] ", "[!!] ", "[#] "};
 	
 	switch( level ) {
+		case ERR:
+			strncpy(prefix,_RED_([!!] ), sizeof(prefix)-1);
+			break;
 		case FAILED:
 			strncpy(prefix,_RED_([-] ), sizeof(prefix)-1);
 			break;
@@ -82,7 +85,7 @@ void PrintAndLogEx(logLevel_t level, char *fmt, ...) {
 
 	// no prefixes for normal
 	if ( level == NORMAL ) {
-		PrintAndLog(buffer);
+		PrintAndLog("%s", buffer);
 		return;
 	}
 	
@@ -107,10 +110,10 @@ void PrintAndLogEx(logLevel_t level, char *fmt, ...) {
 			
 			token = strtok(NULL, delim);
 		}
-		PrintAndLog(buffer2);
+		PrintAndLog("%s", buffer2);
 	} else {
 		snprintf(buffer2, sizeof(buffer2), "%s%s", prefix, buffer);
-		PrintAndLog(buffer2);
+		PrintAndLog("%s", buffer2);
 	}
 }
 

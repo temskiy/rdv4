@@ -32,9 +32,9 @@ CMDOBJS = $(CFILES:%.c=%.o)
 CLEAN = $(CMDOBJS)
 	
 CC= gcc
-CFLAGS= -O2 -Wall -Wno-unused-variable -Wno-unused-function
+CFLAGS= -O2 -Wall -Wno-unused-variable -Wno-unused-function -Wno-format-truncation
 LDFLAGS= $(SYSLDFLAGS) $(libjansson_la_LDFLAGS)
-LIBS= -lm $(SYSLIBS) $(MYLIBS)
+LIBS= $(SYSLIBS) $(MYLIBS)
 DEFAULT_INCLUDES = -I.
 DEFS = -DHAVE_STDINT_H
 

@@ -85,7 +85,49 @@ static const manufactureName manufactureMapping[] = {
 	{ 0x42, "3Alogics Inc Korea" },
 	{ 0x43, "Top TroniQ Asia Limited Hong Kong" },
 	{ 0x44, "Gentag Inc. USA" },
-	{ 0x56, "Sensible Object. UK" },
+	{ 0x45, "Invengo Information Technology Co.Ltd China" },
+	{ 0x46, "Guangzhou Sysur Microelectronics, Inc China" },
+	{ 0x47, "CEITEC S.A. Brazil" },
+	{ 0x48, "Shanghai Quanray Electronics Co. Ltd. China" },
+	{ 0x49, "MediaTek Inc Taiwan" },
+	{ 0x4A, "Angstrem PJSC Russia" },
+	{ 0x4B, "Celisic Semiconductor (Hong Kong) Limited China" },
+	{ 0x4C, "LEGIC Identsystems AG Switzerland" },
+	{ 0x4D, "Balluff GmbH Germany" },
+	{ 0x4E, "Oberthur Technologies France" },
+	{ 0x4F, "Silterra Malaysia Sdn. Bhd. Malaysia" },
+	{ 0x50, "DELTA Danish Electronics, Light & Acoustics Denmark" },
+	{ 0x51, "Giesecke & Devrient GmbH Germany" },
+	{ 0x52, "Shenzhen China Vision Microelectronics Co., Ltd. China" },
+	{ 0x53, "Shanghai Feiju Microelectronics Co. Ltd. China" },
+	{ 0x54, "Intel Corporation USA" },
+	{ 0x55, "Microsensys GmbH Germany" },
+	{ 0x56, "Sonix Technology Co., Ltd. Taiwan" },
+	{ 0x57, "Qualcomm Technologies Inc USA" },
+	{ 0x58, "Realtek Semiconductor Corp Taiwan" },
+	{ 0x59, "Freevision Technologies Co. Ltd China" },
+	{ 0x5A, "Giantec Semiconductor Inc. China" },
+	{ 0x5B, "JSC Angstrem-T Russia" },
+	{ 0x5C, "STARCHIP France" },
+	{ 0x5D, "SPIRTECH France" },
+	{ 0x5E, "GANTNER Electronic GmbH Austria" },
+	{ 0x5F, "Nordic Semiconductor Norway" },
+	{ 0x60, "Verisiti Inc USA" },
+	{ 0x61, "Wearlinks Technology Inc. China" },
+	{ 0x62, "Userstar Information Systems Co., Ltd Taiwan" },
+	{ 0x63, "Pragmatic Printing Ltd. UK" },
+	{ 0x64, "Associacao do Laboratorio de Sistemas Integraveis Tecnologico – LSI-TEC Brazil" },
+	{ 0x65, "Tendyron Corporation China" },
+	{ 0x66, "MUTO Smart Co., Ltd. Korea" },
+	{ 0x67, "ON Semiconductor USA" },
+	{ 0x68, "TUBITAK BILGEM Turkey" },
+	{ 0x69, "Huada Semiconductor Co., Ltd China" },
+	{ 0x6A, "SEVENEY France" },
+	{ 0x6B, "ISSM France" },
+	{ 0x6C, "Wisesec Ltd Israel" },
+	{ 0x7C, "DB HiTek Co Ltd Korea" },
+	{ 0x7D, "SATO Vicinity Australia" },
+	{ 0x7E, "Holtek Taiwan" },	
 	{ 0x00, "no tag-info available" } // must be the last entry
 };
 
@@ -171,22 +213,49 @@ int usage_hf_14a_info(void){
 	PrintAndLogEx(NORMAL, "       n    test for nack bug");
 	return 0;
 }
-int usage_hf_14a_apdu(void) {
-	PrintAndLogEx(NORMAL, "Usage: hf 14a apdu [-s] [-k] [-t] <APDU (hex)>");
-	PrintAndLogEx(NORMAL, "       -s    activate field and select card");
-	PrintAndLogEx(NORMAL, "       -k    leave the signal field ON after receive response");
-	PrintAndLogEx(NORMAL, "       -t    executes TLV decoder if it possible. TODO!!!!");
-	return 0;
-}
-int usage_hf_14a_antifuzz(void) {
-	PrintAndLogEx(NORMAL, "Usage: hf 14a antifuzz [4|7|10]");
-	PrintAndLogEx(NORMAL, "       <len>    determine which anticollision phase the command will target.");
-	return 0;
-}
 
 int CmdHF14AList(const char *Cmd) {
 	//PrintAndLogEx(NORMAL, "Deprecated command, use 'hf list 14a' instead");
 	CmdTraceList("14a");
+	return 0;
+}
+
+int Hf14443_4aGetCardData(iso14a_card_select_t * card) {
+	UsbCommand c = {CMD_READER_ISO_14443a, {ISO14A_CONNECT, 0, 0}};
+	SendCommand(&c);
+
+	UsbCommand resp;
+	WaitForResponse(CMD_ACK,&resp);
+	
+	memcpy(card, (iso14a_card_select_t *)resp.d.asBytes, sizeof(iso14a_card_select_t));
+
+	uint64_t select_status = resp.arg[0];		// 0: couldn't read, 1: OK, with ATS, 2: OK, no ATS, 3: proprietary Anticollision
+	
+	if(select_status == 0) {
+		PrintAndLog("E->iso14443a card select failed");
+		return 1;
+	}
+
+	if(select_status == 2) {
+		PrintAndLog("E->Card doesn't support iso14443-4 mode");
+		return 1;
+	}
+
+	if(select_status == 3) {
+		PrintAndLog("E->Card doesn't support standard iso14443-3 anticollision");
+		PrintAndLog("\tATQA : %02x %02x", card->atqa[1], card->atqa[0]);
+		return 1;
+	}
+
+	PrintAndLog(" UID: %s", sprint_hex(card->uid, card->uidlen));
+	PrintAndLog("ATQA: %02x %02x", card->atqa[1], card->atqa[0]);
+	PrintAndLog(" SAK: %02x [%" PRIu64 "]", card->sak, resp.arg[0]);
+	if(card->ats_len < 3) {			// a valid ATS consists of at least the length byte (TL) and 2 CRC bytes
+		PrintAndLog("E-> Error ATS length(%d) : %s", card->ats_len, sprint_hex(card->ats, card->ats_len));
+		return 1;
+	}
+	PrintAndLog(" ATS: %s", sprint_hex(card->ats, card->ats_len));
+	
 	return 0;
 }
 
@@ -875,57 +944,35 @@ int ExchangeAPDU14a(uint8_t *datain, int datainlen, bool activateField, bool lea
 	return 0;
 }
 
+// ISO14443-4. 7. Half-duplex block transmission protocol
 int CmdHF14AAPDU(const char *cmd) {
 	uint8_t data[USB_CMD_DATA_SIZE];
 	int datalen = 0;
 	bool activateField = false;
 	bool leaveSignalON = false;
 	bool decodeTLV = false;
-	
-	if (strlen(cmd) < 2) return usage_hf_14a_apdu();
 
-	int cmdp = 0;
-	while(param_getchar(cmd, cmdp) != 0x00) {
-		char c = param_getchar(cmd, cmdp);
-		if ((c == '-') && (param_getlength(cmd, cmdp) == 2))
-			switch (tolower(param_getchar_indx(cmd, 1, cmdp))) {
-				case 'h':
-					return usage_hf_14a_apdu();
-				case 's':
-					activateField = true;
-					break;
-				case 'k':
-					leaveSignalON = true;
-					break;
-				case 't':
-					decodeTLV = true;
-					break;
-				default:
-					PrintAndLogEx(WARNING, "Unknown parameter '%c'", param_getchar_indx(cmd, 1, cmdp));
-					return 1;
-			}
+	CLIParserInit("hf 14a apdu", 
+		"Sends an ISO 7816-4 APDU via ISO 14443-4 block transmission protocol (T=CL)", 
+		"Sample:\n\thf 14a apdu -st 00A404000E325041592E5359532E444446303100\n");
+
+	void* argtable[] = {
+		arg_param_begin,
+		arg_lit0("sS",  "select",  "activate field and select card"),
+		arg_lit0("kK",  "keep",    "leave the signal field ON after receive response"),
+		arg_lit0("tT",  "tlv",     "executes TLV decoder if it possible"),
+		arg_strx1(NULL, NULL,      "<APDU (hex)>", NULL),
+		arg_param_end
+	};
+	CLIExecWithReturn(cmd, argtable, false);
 			
-		if (isxdigit(c)) {
+	activateField = arg_get_lit(1);
+	leaveSignalON = arg_get_lit(2);
+	decodeTLV = arg_get_lit(3);
 			// len = data + PCB(1b) + CRC(2b)
-			switch(param_gethex_to_eol(cmd, cmdp, data, sizeof(data) - 1 - 2, &datalen)) {
-			case 1:
-				PrintAndLogEx(WARNING, "invalid HEX value.");
-				return 1;
-			case 2:
-				PrintAndLogEx(WARNING, "APDU too large.");
-				return 1;
-			case 3:
-				PrintAndLogEx(WARNING, "hex must have even number of digits.");
-				return 1;
-			}
-			
-			// we get all the hex to end of line with spaces
-			break;
-		}
-		
-		cmdp++;
-	}
+	CLIGetHexBLessWithReturn(4, data, &datalen, 1 + 2);
 
+CLIParserFree();
 	PrintAndLogEx(NORMAL, ">>>>[%s%s%s] %s", activateField ? "sel ": "", leaveSignalON ? "keep ": "", decodeTLV ? "TLV": "", sprint_hex(data, datalen));
 	
 	int res = ExchangeAPDU14a(data, datalen, activateField, leaveSignalON, data, USB_CMD_DATA_SIZE, &datalen);
@@ -1131,11 +1178,27 @@ static int waitCmd(uint8_t iSelect) {
 
 int CmdHF14AAntiFuzz(const char *cmd) {
 	
-	if (strlen(cmd) < 1) return usage_hf_14a_antifuzz();
+	CLIParserInit("hf 14a antifuzz", 
+		"Tries to fuzz the ISO14443a anticollision phase", 
+		"Usage:\n"
+		"\thf 14a antifuzz -4\n");
 
-	//	read param length
-	uint8_t arg0 = 4;
-	
+	void* argtable[] = {
+		arg_param_begin,
+		arg_lit0("4",   NULL,  "4 byte uid"),
+		arg_lit0("7",   NULL,  "7 byte uid"),
+		arg_lit0(NULL,  "10",  "10 byte uid"),
+		arg_param_end
+	};
+	CLIExecWithReturn(cmd, argtable, false);
+
+	uint8_t arg0 = FLAG_4B_UID_IN_DATA;
+	if (arg_get_lit(2))
+		arg0 = FLAG_7B_UID_IN_DATA;		
+	if (arg_get_lit(3))
+		arg0 = FLAG_10B_UID_IN_DATA;
+
+	CLIParserFree();
 	UsbCommand c = {CMD_ANTIFUZZ_ISO_14443a, {arg0, 0, 0}};	
 	clearCommandBuffer();
     SendCommand(&c);	
