@@ -19,7 +19,7 @@
 #include <stdint.h>
 #include <readline/readline.h>
 #include <pthread.h>
-#include <math.h>	
+#include <math.h>
 #include <complex.h>
 #include "util.h"
 
@@ -48,6 +48,6 @@ extern bool showDemod;
 
 extern pthread_mutex_t print_lock;
 
-extern void iceIIR_Butterworth(int * data, const size_t len);
+extern void iceIIR_Butterworth(int *data, const size_t len);
 extern void iceSimple_Filter(int *data, const size_t len, uint8_t k);
 #endif

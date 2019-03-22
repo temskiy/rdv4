@@ -31,17 +31,17 @@
 #include "cmdscript.h"
 #include "cmdcrc.h"
 #include "cmdanalyse.h"
-#include "emv/cmdemv.h"		// EMV				  
+#include "emv/cmdemv.h"   // EMV
 
 #ifdef WITH_FLASH
-#include "cmdflashmem.h"	// rdv40 flashmem commands
+#include "cmdflashmem.h"  // rdv40 flashmem commands
 #endif
 
 #ifdef WITH_SMARTCARD
-#include "cmdsmartcard.h"	// rdv40 smart card ISO7816 commands
+#include "cmdsmartcard.h" // rdv40 smart card ISO7816 commands
 #endif
 
 extern int CommandReceived(char *Cmd);
-extern command_t* getTopLevelCommandTable();
+extern command_t *getTopLevelCommandTable();
 
 #endif

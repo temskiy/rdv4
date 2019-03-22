@@ -19,7 +19,7 @@
 #include "cmdmain.h"
 #include "comms.h"
 #include "util.h"
-#include "mifarehost.h"
+#include "mifare/mifarehost.h"
 #include "crc.h"
 #include "crc16.h"
 #include "crc64.h"
@@ -30,9 +30,9 @@
 #include "cmdhfmfu.h"
 #include "protocols.h"
 
-#define LUA_LIBRARIES_DIRECTORY 	"lualibs/"
-#define LUA_SCRIPTS_DIRECTORY 		"scripts/"
-#define LUA_LIBRARIES_WILDCARD 		"?.lua"
+#define LUA_LIBRARIES_DIRECTORY "lualibs/"
+#define LUA_SCRIPTS_DIRECTORY   "scripts/"
+#define LUA_LIBRARIES_WILDCARD  "?.lua"
 
 /**
  * @brief set_libraries loads the core components of pm3 into the 'pm3'

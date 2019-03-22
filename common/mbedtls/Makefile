@@ -49,11 +49,11 @@ mbedtls_LDFLAGS = \
 	-export-symbols-regex '^mbedtls_' \
 	-version-info 15:0:11
 
-	
+
 CFILES = $(filter %.c, $(mbedtls_SOURCES))
 CMDOBJS = $(CFILES:%.c=%.o)
 CLEAN = $(CMDOBJS)
-	
+
 CC= gcc
 CFLAGS= -O2 -Wall -Wno-unused-variable -Wno-unused-function
 LDFLAGS= $(SYSLDFLAGS) $(mbedtls_LDFLAGS)
@@ -72,16 +72,18 @@ SYSLIBS=
 MYLIBS=
 MYOBJS=
 
-all: $(CMDOBJS)
+$(LIB_A): $(CMDOBJS)
 	$(AR) $(LIB_A) $(CMDOBJS)
 	$(RANLIB) $(LIB_A)
-	
+
+all: $(LIB_A)
+
 clean:
 	$(RM) $(CLEAN)
 	$(RM) $(LIB_A)
-	
+
 %.o: %.c
 	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(CFLAGS) -c -o $@ $< $(LIBS)
-	
+
 .PHONY: all clean
 

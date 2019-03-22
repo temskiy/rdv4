@@ -78,7 +78,14 @@ This fork now compiles just fine on
 
 ## KALI and ARCHLINUX users
 Kali and ArchLinux users usually must kill their modem manager in order for the proxmark3 to enumerate properly.   
-`sudo apt remove modemmanager`
+```sh
+sudo apt remove modemmanager
+```
+or 
+```sh
+systemctl stop ModemManager
+systemctl disable ModemManager
+```
 
 ## Setup and build for UBUNTU
 GC made updates to allow this to build easily on Ubuntu 14.04.2 LTS, 15.10 or 16.04
@@ -279,7 +286,7 @@ You will need to run these commands to make sure your rdv4 is prepared
 
 ### Verify sim module firmware version
 To make sure you got the latest sim module firmware.
-_Lastest version is v3.10_
+_Lastest version is v3.11_
 
     pm3 --> hw status
 
@@ -291,7 +298,7 @@ Find version in the long output,  look for these two lines
 This version is obselete. The following command upgrades your device sim module firmware.
 Don't not turn of your device during the execution of this command.
 
-    pm3 --> sc upgrade f ../tools/simmodule/SIM010.BIN 
+    pm3 --> sc upgrade f ../tools/simmodule/SIM011.BIN 
     
 You get the following output,  this is a successful execution.    
     
