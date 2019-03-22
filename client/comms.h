@@ -20,11 +20,11 @@
 #include "ui.h"
 #include "common.h"
 #include "util_posix.h"
-#include "util.h" 
+#include "util.h"
 #include "util_darwin.h"
 
 #if defined(__linux__) && !defined(NO_UNLINK)
-#include <unistd.h>		// for unlink()
+#include <unistd.h> // for unlink()
 #endif
 
 //For storing command that are received from the device
@@ -33,17 +33,17 @@
 #endif
 
 typedef enum {
-	BIG_BUF,
-	BIG_BUF_EML,
-	FLASH_MEM,
-	SIM_MEM,
-	} DeviceMemType_t;
+    BIG_BUF,
+    BIG_BUF_EML,
+    FLASH_MEM,
+    SIM_MEM,
+} DeviceMemType_t;
 
 typedef struct {
-	bool run; // If TRUE, continue running the uart_communication thread
-	bool block_after_ACK; // if true, block after receiving an ACK package
+    bool run; // If TRUE, continue running the uart_communication thread
+    bool block_after_ACK; // if true, block after receiving an ACK package
 } communication_arg_t;
-	
+
 
 bool dl_it(uint8_t *dest, uint32_t bytes, uint32_t start_index, UsbCommand *response, size_t ms_timeout, bool show_warning, uint32_t rec_cmd);
 
@@ -56,10 +56,10 @@ void clearCommandBuffer();
 
 bool OpenProxmark(void *port, bool wait_for_port, int timeout, bool flash_mode);
 void CloseProxmark(void);
-	
-bool WaitForResponseTimeoutW(uint32_t cmd, UsbCommand* response, size_t ms_timeout, bool show_warning);
-bool WaitForResponseTimeout(uint32_t cmd, UsbCommand* response, size_t ms_timeout);
-bool WaitForResponse(uint32_t cmd, UsbCommand* response);
+
+bool WaitForResponseTimeoutW(uint32_t cmd, UsbCommand *response, size_t ms_timeout, bool show_warning);
+bool WaitForResponseTimeout(uint32_t cmd, UsbCommand *response, size_t ms_timeout);
+bool WaitForResponse(uint32_t cmd, UsbCommand *response);
 
 extern bool GetFromDevice(DeviceMemType_t memtype, uint8_t *dest, uint32_t bytes, uint32_t start_index, UsbCommand *response, size_t ms_timeout, bool show_warning);
 

@@ -9,29 +9,29 @@
 #ifndef __CRC_H
 #define __CRC_H
 
-#include "common.h"	//stdint, stddef, stdbool
-#include "util.h"	// reflect, bswap_16
+#include "common.h" //stdint, stddef, stdbool
+#include "util.h"   // reflect, bswap_16
 
 typedef struct crc {
-	uint32_t state;
-	int order;
-	uint32_t polynom;
-	uint32_t initial_value;
-	uint32_t final_xor;
-	uint32_t mask;
-	int topbit;
-	bool refin;    /* Parameter: Reflect input bytes?        */
-	bool refout;   /* Parameter: Reflect output CRC?         */
+    uint32_t state;
+    int order;
+    uint32_t polynom;
+    uint32_t initial_value;
+    uint32_t final_xor;
+    uint32_t mask;
+    int topbit;
+    bool refin;    /* Parameter: Reflect input bytes?        */
+    bool refout;   /* Parameter: Reflect output CRC?         */
 } crc_t;
 
 /* Initialize a crc structure. order is the order of the polynom, e.g. 32 for a CRC-32
  * polynom is the CRC polynom. initial_value is the initial value of a clean state.
- * final_xor is XORed onto the state before returning it from crc_result(). 
+ * final_xor is XORed onto the state before returning it from crc_result().
  * refin is the setting for reversing (bitwise) the bytes during crc
  * refot is the setting for reversing (bitwise) the crc byte before returning it.
  */
 extern void crc_init_ref(crc_t *crc, int order, uint32_t polynom, uint32_t initial_value, uint32_t final_xor, bool refin, bool refout);
-	
+
 /* Initialize a crc structure. order is the order of the polynom, e.g. 32 for a CRC-32
  * polynom is the CRC polynom. initial_value is the initial value of a clean state.
  * final_xor is XORed onto the state before returning it from crc_result(). */
@@ -64,14 +64,14 @@ uint32_t CRC8Legic(uint8_t *buff, size_t size);
 
 /* Static initialization of a crc structure */
 #define CRC_INITIALIZER(_order, _polynom, _initial_value, _final_xor) { \
-	.state = ((_initial_value) & ((1L<<(_order))-1)), \
-	.order = (_order), \
-	.polynom = (_polynom), \
-	.initial_value = (_initial_value), \
-	.final_xor = (_final_xor), \
-	.mask = ((1L<<(_order))-1) \
-	.refin = false, \
-	.refout = false \
-	}
+        .state = ((_initial_value) & ((1L<<(_order))-1)), \
+                 .order = (_order), \
+                          .polynom = (_polynom), \
+                                     .initial_value = (_initial_value), \
+                                                      .final_xor = (_final_xor), \
+                                                                   .mask = ((1L<<(_order))-1) \
+                                                                           .refin = false, \
+                                                                                   .refout = false \
+    }
 
 #endif /* __CRC_H */

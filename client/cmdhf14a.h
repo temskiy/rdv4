@@ -28,16 +28,16 @@
 #include "mifare.h"
 #include "cmdhfmf.h"
 #include "cmdhfmfu.h"
-#include "cmdhf.h"		// list cmd
-#include "mifarehost.h"
+#include "cmdhf.h"  // list cmd
+#include "mifare/mifarehost.h"
 #include "emv/apduinfo.h"
-#include "emv/emvcore.h"						  
+#include "emv/emvcore.h"
 
-// structure and database for uid -> tagtype lookups 
-typedef struct { 
-	uint8_t uid;
-	char* desc;
-} manufactureName; 
+// structure and database for uid -> tagtype lookups
+typedef struct {
+    uint8_t uid;
+    char *desc;
+} manufactureName;
 
 extern int CmdHF14A(const char *Cmd);
 extern int CmdHF14AList(const char *Cmd);
@@ -47,10 +47,11 @@ extern int CmdHF14ASim(const char *Cmd);
 extern int CmdHF14ASniff(const char *Cmd);
 extern int CmdHF14ACmdRaw(const char *Cmd);
 extern int CmdHF14ACUIDs(const char *Cmd);
-extern int CmdHF14AAntiFuzz(const char *cmd);
+extern int CmdHF14AAntiFuzz(const char *Cmd);
 
-extern char* getTagInfo(uint8_t uid);
-extern int ExchangeAPDU14a(uint8_t *datain, int datainlen, bool activateField, bool leaveSignalON, uint8_t *dataout, int maxdataoutlen, int *dataoutlen);									
+extern char *getTagInfo(uint8_t uid);
+extern int Hf14443_4aGetCardData(iso14a_card_select_t *card);
+extern int ExchangeAPDU14a(uint8_t *datain, int datainlen, bool activateField, bool leaveSignalON, uint8_t *dataout, int maxdataoutlen, int *dataoutlen);
 extern int ExchangeRAW14a(uint8_t *datain, int datainlen, bool activateField, bool leaveSignalON, uint8_t *dataout, int maxdataoutlen, int *dataoutlen);
 
 extern int usage_hf_14a_sim(void);

@@ -7,8 +7,8 @@
 // Low frequency demod related commands
 // marshmellow
 // note that many of these demods are not the slickest code and they often rely
-//   on peaks and clock instead of converting to clean signal. 
-//   
+//   on peaks and clock instead of converting to clean signal.
+//
 //-----------------------------------------------------------------------------
 
 #ifndef LFDEMOD_H__
@@ -19,23 +19,27 @@
 #include <stdlib.h>  // for
 #include <stdbool.h> // for bool
 #include "parity.h"  // for parity test
-#include "util.h"	 // for ARRAYLEN
+#include "util.h"    // for ARRAYLEN
+
+//might not be high enough for noisy environments
+#define NOISE_AMPLITUDE_THRESHOLD 15
+//ignore buffer with less than x samples
+#define SIGNAL_MIN_SAMPLES 100
+//ignore first x samples of the buffer
+#define SIGNAL_IGNORE_FIRST_SAMPLES 10
+
 //generic
 typedef struct {
-	int low;
-	int high;
-	int mean;
-	int amplitude;
-	bool isnoise;
+    int low;
+    int high;
+    int mean;
+    int amplitude;
+    bool isnoise;
 } signal_t;
-extern signal_t* getSignalProperties(void);
+signal_t *getSignalProperties(void);
 
-extern uint32_t	compute_mean_uint(uint8_t *in, size_t N);
-extern int32_t	compute_mean_int(int *in, size_t N);
-bool isNoise_int(int *bits, uint32_t size);
-bool isNoise(uint8_t *bits, uint32_t size);
-extern void zeromean(uint8_t* data, size_t size);
-	
+void computeSignalProperties(uint8_t *bits, uint32_t size);
+void removeSignalOffset(uint8_t *samples, uint32_t size);
 void getNextLow(uint8_t *samples, size_t size, int low, size_t *i);
 void getNextHigh(uint8_t *samples, size_t size, int high, size_t *i);
 bool loadWaveCounters(uint8_t *samples, size_t size, int lowToLowWaveLen[], int highToLowWaveLen[], int *waveCnt, int *skip, int *minClk, int *high, int *low);
@@ -46,12 +50,12 @@ extern int      askdemod(uint8_t *bits, size_t *size, int *clk, int *invert, int
 extern int      askdemod_ext(uint8_t *bits, size_t *size, int *clk, int *invert, int maxErr, uint8_t amp, uint8_t askType, int *startIdx);
 extern void     askAmp(uint8_t *bits, size_t size);
 extern int      BiphaseRawDecode(uint8_t *bits, size_t *size, int *offset, int invert);
-extern uint8_t bits_to_array(const uint8_t *bits, size_t size, uint8_t *dest);
+extern uint8_t  bits_to_array(const uint8_t *bits, size_t size, uint8_t *dest);
 extern uint32_t bytebits_to_byte(uint8_t *src, size_t numbits);
 extern uint32_t bytebits_to_byteLSBF(uint8_t *src, size_t numbits);
 extern uint16_t countFC(uint8_t *bits, size_t size, bool fskAdj);
 extern int      DetectASKClock(uint8_t *dest, size_t size, int *clock, int maxErr);
-extern bool		DetectCleanAskWave(uint8_t *dest, size_t size, uint8_t high, uint8_t low);
+extern bool     DetectCleanAskWave(uint8_t *dest, size_t size, uint8_t high, uint8_t low);
 extern uint8_t  detectFSKClk(uint8_t *bits, size_t size, uint8_t fcHigh, uint8_t fcLow, int *firstClockEdge);
 extern int      DetectNRZClock(uint8_t *dest, size_t size, int clock, size_t *clockStartIdx);
 extern int      DetectPSKClock(uint8_t *dest, size_t size, int clock, size_t *firstPhaseShift, uint8_t *curPhase, uint8_t *fc);
@@ -65,8 +69,8 @@ extern int      ManchesterEncode(uint8_t *bits, size_t size);
 extern int      manrawdecode(uint8_t *bits, size_t *size, uint8_t invert, uint8_t *alignPos);
 extern int      nrzRawDemod(uint8_t *dest, size_t *size, int *clk, int *invert, int *startIdx);
 extern bool     parityTest(uint32_t bits, uint8_t bitLen, uint8_t pType);
-extern bool		preambleSearch(uint8_t *bits, uint8_t *preamble, size_t pLen, size_t *size, size_t *startIdx);
-extern bool		preambleSearchEx(uint8_t *bits, uint8_t *preamble, size_t pLen, size_t *size, size_t *startIdx, bool findone);
+extern bool     preambleSearch(uint8_t *bits, uint8_t *preamble, size_t pLen, size_t *size, size_t *startIdx);
+extern bool     preambleSearchEx(uint8_t *bits, uint8_t *preamble, size_t pLen, size_t *size, size_t *startIdx, bool findone);
 extern int      pskRawDemod(uint8_t *dest, size_t *size, int *clock, int *invert);
 extern int      pskRawDemod_ext(uint8_t *dest, size_t *size, int *clock, int *invert, int *startIdx);
 extern void     psk2TOpsk1(uint8_t *bits, size_t size);

@@ -7,7 +7,7 @@
 #-----------------------------------------------------------------------------
 
 # DO NOT use thumb mode in the phase 1 bootloader since that generates a section with glue code
-ARMSRC = 
+ARMSRC =
 THUMBSRC = cmd.c \
 	usb_cdc.c \
 	bootrom.c
@@ -20,10 +20,14 @@ VERSIONSRC = version.c
 ## zeroes. As a temporary workaround, do not use thumb for the phase 2 bootloader
 ## -- Henryk Plötz <henryk@ploetzli.ch> 2009-09-01
 # ARMSRC := $(ARMSRC) $(THUMBSRC)
-# THUMBSRC := 
+# THUMBSRC :=
 
 # stdint.h provided locally until GCC 4.5 becomes C99 compliant
 APP_CFLAGS = -I. -fno-strict-aliasing -ffunction-sections -fdata-sections
+
+# stack-protect , no-pie reduces size on Gentoo Hardened 8.2 gcc
+APP_CFLAGS += -fno-stack-protector -fno-pie
+
 
 # Do not move this inclusion before the definition of {THUMB,ASM,ARM}SRC
 include ../common/Makefile.common
@@ -32,7 +36,7 @@ OBJS = $(OBJDIR)/bootrom.s19
 
 # version.c should be remade on every compilation
 version.c: default_version.c
-	perl ../tools/mkversion.pl .. > $@ || $(COPY) $^ $@ 
+	perl ../tools/mkversion.pl .. > $@ || $(COPY) $^ $@
 
 all: $(OBJS)
 
@@ -50,7 +54,7 @@ clean:
 	$(DELETE) $(OBJDIR)$(PATHSEP)*.d
 	$(DELETE) version.c
 
-.PHONY: all clean help 
+.PHONY: all clean help
 help:
 	@echo Multi-OS Makefile, you are running on $(DETECTED_OS)
 	@echo Possible targets:

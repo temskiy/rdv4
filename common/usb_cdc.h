@@ -37,7 +37,7 @@
 
 #include <wchar.h>
 #include "at91sam7s512.h"
-#include "config_gpio.h" 
+#include "config_gpio.h"
 #include "proxmark3.h" // USB_CONNECT()
 #include "common.h"
 
@@ -46,8 +46,8 @@ extern void usb_enable();
 extern bool usb_check();
 extern bool usb_poll();
 extern bool usb_poll_validate_length();
-extern uint32_t usb_read(byte_t* data, size_t len);
-extern uint32_t usb_write(const byte_t* data, const size_t len);
+extern uint32_t usb_read(uint8_t *data, size_t len);
+extern uint32_t usb_write(const uint8_t *data, const size_t len);
 
 extern void SetUSBreconnect(int value);
 extern int GetUSBreconnect(void);

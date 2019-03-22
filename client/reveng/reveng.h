@@ -1,10 +1,10 @@
 /* reveng.h
- * Greg Cook, 26/Jul/2018
+ * Greg Cook, 23/Feb/2019
  */
 
 /* CRC RevEng: arbitrary-precision CRC calculator and algorithm finder
- * Copyright (C) 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018
- * Gregory Cook
+ * Copyright (C) 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018,
+ * 2019  Gregory Cook
  *
  * This file is part of CRC RevEng.
  *
@@ -93,7 +93,7 @@
 /* Global definitions */
 
 /* CRC RevEng version string */
-#define VERSION "1.5.3"
+#define VERSION "1.6.2"
 
 /* bmpbit.c */
 typedef BMP_T bmp_t;
@@ -111,6 +111,19 @@ extern void setbmp(void);
 #define P_LTLBYT    64
 #define P_DIRECT   128
 
+/* class flags */
+#define P_CLBIT0   256
+#define P_CLBIT1   512
+#define P_SOLID   1024
+#define P_CLMASK (P_SOLID | P_CLBIT1 | P_CLBIT0)
+
+#define P_UNDFCL     0
+#define P_UNCONF (P_CLBIT0)
+#define P_THIRDP (P_CLBIT1)
+#define P_ACADEM (P_CLBIT1 | P_CLBIT0)
+#define P_CONFIR (P_SOLID | P_CLBIT0)
+#define P_ATTEST (P_SOLID | P_CLBIT1)
+
 /* default flags */
 #define P_BE     (P_RTJUST | P_MULXN)
 #define P_LE     (P_REFIN | P_REFOUT | P_MULXN)
@@ -121,9 +134,9 @@ extern void setbmp(void);
 #define PZERO {0UL, (bmp_t *) 0}
 
 typedef struct {
-	unsigned long length;	/* number of significant bits */
-	bmp_t *bitmap;		/* bitmap, MSB first, */
-				/* left-justified in each word */
+    unsigned long length; /* number of significant bits */
+    bmp_t *bitmap;        /* bitmap, MSB first, */
+    /* left-justified in each word */
 } poly_t;
 
 extern poly_t filtop(FILE *input, unsigned long length, int flags, int bperhx);
@@ -168,13 +181,13 @@ extern int pident(const poly_t a, const poly_t b);
 #define MZERO {PZERO, PZERO, P_BE, PZERO, PZERO, PZERO, NULL}
 
 typedef struct {
-	poly_t spoly;		/* polynomial with highest-order term removed. length determines CRC width */
-	poly_t init;		/* initial register value. length == spoly.length */
-	int flags;		/* P_REFIN and P_REFOUT indicate reflected input/output */
-	poly_t xorout;		/* final register XOR mask. length == spoly.length */
-	poly_t check;		/* optional check value, the CRC of the UTF-8 string "123456789" */
-	poly_t magic;		/* optional magic check value, the residue of a valid codeword */
-	const char *name;	/* optional canonical name of the model */
+    poly_t spoly;       /* polynomial with highest-order term removed. length determines CRC width */
+    poly_t init;        /* initial register value. length == spoly.length */
+    int flags;          /* P_REFIN and P_REFOUT indicate reflected input/output */
+    poly_t xorout;      /* final register XOR mask. length == spoly.length */
+    poly_t check;       /* optional check value, the CRC of the UTF-8 string "123456789" */
+    poly_t magic;       /* optional magic check value, the residue of a valid codeword */
+    const char *name;   /* optional canonical name of the model */
 } model_t;
 
 extern void mcpy(model_t *dest, const model_t *src);
@@ -187,7 +200,7 @@ extern void mrev(model_t *model);
 extern void mnovel(model_t *model);
 
 /* preset.c */
-#define M_OVERWR   256
+#define M_OVERWR     1
 
 extern int mbynam(model_t *dest, const char *key);
 extern void mbynum(model_t *dest, int num);
@@ -196,12 +209,12 @@ extern char *mnames(void);
 extern void mmatch(model_t *model, int flags);
 
 /* reveng.c */
-#define R_HAVEP    512
-#define R_HAVEI   1024
-#define R_HAVERI  2048
-#define R_HAVERO  4096
-#define R_HAVEX   8192
-#define R_HAVEQ  16384
+#define R_HAVEP      1
+#define R_HAVEI      2
+#define R_HAVERI     4
+#define R_HAVERO     8
+#define R_HAVEX     16
+#define R_HAVEQ     32
 
 #define R_SPMASK 0x7FFFFFFUL
 

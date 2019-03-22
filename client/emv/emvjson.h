@@ -14,11 +14,11 @@
 #include "tlv.h"
 
 typedef struct {
-	tlv_tag_t Tag;
-	char *Name;
+    tlv_tag_t Tag;
+    char *Name;
 } ApplicationDataElm;
 
-extern char* GetApplicationDataName(tlv_tag_t tag);
+extern char *GetApplicationDataName(tlv_tag_t tag);
 
 extern int JsonSaveJsonObject(json_t *root, char *path, json_t *value);
 extern int JsonSaveStr(json_t *root, char *path, char *value);
