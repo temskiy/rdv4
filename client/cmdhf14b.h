@@ -26,8 +26,8 @@
 #include "cmdhf.h"
 #include "prng.h"
 #include "mbedtls/sha1.h"
-#include "mifare.h"		// structs/enum for ISO14B
-#include "protocols.h"	// definitions of ISO14B protocol
+#include "mifare.h"     // structs/enum for ISO14B
+#include "protocols.h"  // definitions of ISO14B protocol
 
 int usage_hf_14b_info(void);
 int usage_hf_14b_reader(void);
@@ -42,16 +42,16 @@ extern int CmdHF14BList(const char *Cmd);
 extern int CmdHF14BInfo(const char *Cmd);
 extern int CmdHF14BSim(const char *Cmd);
 extern int CmdHF14BSniff(const char *Cmd);
-extern int CmdHF14BWrite( const char *cmd);
+extern int CmdHF14BWrite(const char *cmd);
 extern int CmdHF14BReader(const char *Cmd);
 
 extern int CmdHF14BDump(const char *Cmd);
 
 extern bool HF14BInfo(bool verbose);
 extern bool HF14BReader(bool verbose);
-extern int CmdHF14BCmdRaw (const char *Cmd);
+extern int CmdHF14BCmdRaw(const char *Cmd);
 
-// SRi  ST Microelectronics read/write 
+// SRi  ST Microelectronics read/write
 extern int CmdHF14BReadSri(const char *Cmd);
 extern int CmdHF14BWriteSri(const char *Cmd);
 

@@ -11,7 +11,7 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
- * 
+ *
  * https://github.com/lumag/emv-tools/blob/master/lib/include/openemv/tlv.h
  */
 
@@ -25,9 +25,9 @@
 typedef uint32_t tlv_tag_t;
 
 struct tlv {
-	tlv_tag_t tag;
-	size_t len;
-	const unsigned char *value;
+    tlv_tag_t tag;
+    size_t len;
+    const unsigned char *value;
 };
 
 struct tlvdb;
@@ -64,5 +64,7 @@ bool tlv_equal(const struct tlv *a, const struct tlv *b);
 
 bool tlv_get_uint8(const struct tlv *etlv, uint8_t *value);
 bool tlv_get_int(const struct tlv *etlv, int *value);
+
+bool tlvdb_get_uint8(struct tlvdb *tlvRoot, tlv_tag_t tag, uint8_t *value);
 
 #endif

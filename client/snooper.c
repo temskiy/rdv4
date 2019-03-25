@@ -5,7 +5,7 @@
 // at your option, any later version. See the LICENSE.txt file for the text of
 // the license.
 //-----------------------------------------------------------------------------
-// Snooper binary
+// Sniff binary
 //-----------------------------------------------------------------------------
 
 #include "util_posix.h"
@@ -13,34 +13,33 @@
 #include "cmdmain.h"
 
 #define HANDLE_ERROR if (error_occured) { \
-  error_occured = 0;\
-  break;\
-}
-
-int main()
-{
-  usb_init();
-  SetLogFilename("snooper.log");
-
-  return_on_error = 1;
-
-  while(1) {
-    while (!OpenProxmark()) { sleep(1); }
-    while (1) {
-      UsbCommand cmdbuf;
-      CommandReceived("hf 14a snoop");
-      HANDLE_ERROR;
-      ReceiveCommand(&cmdbuf);
-      HANDLE_ERROR;
-      for (int i = 0; i < 5; ++i) {
-        ReceiveCommandPoll(&cmdbuf);
-      }
-      HANDLE_ERROR;
-      CommandReceived("hf list 14a");
-      HANDLE_ERROR;
+        error_occured = 0;\
+        break;\
     }
-  }
 
-  CloseProxmark();
-  return 0;
+int main() {
+    usb_init();
+    SetLogFilename("sniffer.log");
+
+    return_on_error = 1;
+
+    while (1) {
+        while (!OpenProxmark()) { sleep(1); }
+        while (1) {
+            UsbCommand cmdbuf;
+            CommandReceived("hf 14a sniff");
+            HANDLE_ERROR;
+            ReceiveCommand(&cmdbuf);
+            HANDLE_ERROR;
+            for (int i = 0; i < 5; ++i) {
+                ReceiveCommandPoll(&cmdbuf);
+            }
+            HANDLE_ERROR;
+            CommandReceived("hf list 14a");
+            HANDLE_ERROR;
+        }
+    }
+
+    CloseProxmark();
+    return 0;
 }

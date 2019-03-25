@@ -4,6 +4,22 @@
 # the license.
 #-----------------------------------------------------------------------------
 
+# This Makefile might have been called directly, not via the root Makefile, so:
+ifeq ($(PLTNAME),)
+  -include ../Makefile.platform
+  ifeq ($(PLATFORM),)
+    PLATFORM=PM3RDV4
+  else
+    ${info using saved PLATFORM '$(PLATFORM)'}
+  endif
+  include ../common/Makefile.hal
+  $(info ===================================================================)
+  $(info PLATFORM: $(PLATFORM))
+  $(info $(PLTNAME))
+  $(info Included supports: $(PLATFORM_DEFS))
+  $(info ===================================================================)
+endif
+
 # reveng will compile without macros, but these may be useful:
 # Add -DBMPMACRO to use bitmap size constant macros (edit config.h)
 # Add -DNOFORCE  to disable the -F switch
@@ -39,13 +55,13 @@ CXXFLAGS = -I../include -Wall -O3
 
 LUAPLATFORM = generic
 platform = $(shell uname)
-ifneq (,$(findstring MINGW,$(platform))) 
+ifneq (,$(findstring MINGW,$(platform)))
     LUAPLATFORM = mingw
 else
 	ifeq ($(platform),Darwin)
     LUAPLATFORM = macosx
 	OBJCSRCS = util_darwin.m
-	LDFLAGS += -framework Foundation -framework AppKit	
+	LDFLAGS += -framework Foundation -framework AppKit
 else
     LUALIB +=  -ldl
     LDLIBS +=  -ltermcap -lncurses
@@ -59,7 +75,7 @@ QTLDLIBS = $(shell pkg-config --libs Qt5Core Qt5Widgets 2>/dev/null)
 MOC = $(shell pkg-config --variable=host_bins Qt5Core)/moc
 UIC = $(shell pkg-config --variable=host_bins Qt5Core)/uic
 ifeq ($(QTINCLUDES), )
-# if Qt5 not found check for correctly configured Qt4	
+# if Qt5 not found check for correctly configured Qt4
 	QTINCLUDES = $(shell pkg-config --cflags QtCore QtGui 2>/dev/null)
 	QTLDLIBS = $(shell pkg-config --libs QtCore QtGui 2>/dev/null)
 	MOC = $(shell pkg-config --variable=moc_location QtCore)
@@ -90,8 +106,7 @@ else
     QTGUIOBJS = $(OBJDIR)/guidummy.o
 endif
 
-# RDV40 flag enables flashmemory commands in client.  comment out if you don't have rdv40
-CFLAGS += -DWITH_FLASH -DWITH_SMARTCARD 
+CFLAGS += $(PLATFORM_DEFS)
 
 # Flags to generate temporary dependency files
 DEPFLAGS = -MT $@ -MMD -MP -MF $(OBJDIR)/$*.Td
@@ -108,7 +123,7 @@ CORESRCS =  uart_posix.c \
 
 CMDSRCS =	crapto1/crapto1.c \
 			crapto1/crypto1.c \
-			mfkey.c \
+			mifare/mfkey.c \
 			tea.c \
 			fido/additional_ca.c \
 			fido/cose.c \
@@ -126,7 +141,7 @@ CMDSRCS =	crapto1/crapto1.c \
 			loclass/elite_crack.c \
 			loclass/fileutils.c \
 			whereami.c \
-			mifarehost.c \
+			mifare/mifarehost.c \
 			parity.c \
 			crc.c \
 			crc16.c \
@@ -156,7 +171,9 @@ CMDSRCS =	crapto1/crapto1.c \
 			emv/test/cda_test.c\
 			emv/cmdemv.c \
 			emv/emv_roca.c \
-            mifare4.c \
+            mifare/mifare4.c \
+            mifare/mad.c \
+            mifare/ndef.c \
 			cmdanalyse.c \
 			cmdhf.c \
 			cmdhflist.c \
@@ -187,6 +204,7 @@ CMDSRCS =	crapto1/crapto1.c \
 			cmdlfio.c \
 			cmdlfindala.c \
 			cmdlfjablotron.c \
+			cmdlfkeri.c \
 			cmdlfnexwatch.c \
 			cmdlfnedap.c \
 			cmdlfnoralsy.c \
@@ -229,7 +247,7 @@ endif
 ifeq ($(MULTIARCHSRCS), )
 	CMDSRCS += hardnested/hardnested_bf_core.c hardnested/hardnested_bitarray_core.c
 endif
-		
+
 ZLIBSRCS = deflate.c adler32.c trees.c zutil.c inflate.c inffast.c inftrees.c
 ZLIBFLAGS = -DZ_SOLO -DZ_PREFIX -DNO_GZIP -DZLIB_PM3_TUNED
 #-DDEBUG -Dverbose=1
@@ -268,7 +286,7 @@ WINBINS = $(patsubst %, %.exe, $(BINS))
 CLEAN = $(BINS) $(WINBINS) $(COREOBJS) $(CMDOBJS) $(OBJCOBJS) $(ZLIBOBJS) $(QTGUIOBJS) $(MULTIARCHOBJS) $(OBJDIR)/*.o *.moc.cpp ui/ui_overlays.h lualibs/usb_cmd.lua lualibs/mf_default_keys.lua
 
 # need to assign dependancies to build these first...
-all: lua_build jansson_build mbedtls_build cbor_build $(BINS) 
+all: lua_build jansson_build mbedtls_build cbor_build $(BINS)
 
 all-static: LDLIBS:=-static $(LDLIBS)
 all-static: proxmark3 flasher fpga_compress
@@ -276,7 +294,7 @@ all-static: proxmark3 flasher fpga_compress
 proxmark3: LDLIBS+=$(LUALIB) $(JANSSONLIB) $(MBEDTLSLIB) $(CBORLIB) $(QTLDLIBS)
 proxmark3: $(OBJDIR)/proxmark3.o $(COREOBJS) $(CMDOBJS) $(OBJCOBJS) $(QTGUIOBJS) $(MULTIARCHOBJS) $(ZLIBOBJS) lualibs/usb_cmd.lua lualibs/mf_default_keys.lua
 	$(LD) $(LDFLAGS) $(OBJDIR)/proxmark3.o $(COREOBJS) $(CMDOBJS) $(OBJCOBJS) $(QTGUIOBJS) $(MULTIARCHOBJS) $(ZLIBOBJS) $(LDLIBS)  -o $@
-	
+
 flasher: $(OBJDIR)/flash.o $(OBJDIR)/flasher.o $(COREOBJS) $(OBJCOBJS)
 	$(LD) $(LDFLAGS) $^ $(LDLIBS) -o $@
 
@@ -296,55 +314,61 @@ lualibs/usb_cmd.lua: ../include/usb_cmd.h
 
 lualibs/mf_default_keys.lua : default_keys.dic
 	awk -f default_keys_dic2lua.awk $^ > $@
-	
+
 clean:
 	$(RM) $(CLEAN)
-	cd ../liblua && make clean
-	cd $(JANSSONLIBPATH) && make clean
-	cd $(MBEDTLSLIBPATH) && make clean
-	cd $(CBORLIBPATH) && make clean
+	cd ../liblua && $(MAKE) clean
+	cd $(JANSSONLIBPATH) && $(MAKE) clean
+	cd $(MBEDTLSLIBPATH) && $(MAKE) clean
+	cd $(CBORLIBPATH) && $(MAKE) clean
 
 tarbin: $(BINS)
 	$(TAR) $(TARFLAGS) ../proxmark3-$(platform)-bin.tar $(BINS:%=client/%) $(WINBINS:%=client/%)
 
 lua_build:
 	@echo Compiling liblua, using platform $(LUAPLATFORM)
-	cd ../liblua && make $(LUAPLATFORM)
-	
+	cd ../liblua && $(MAKE) $(LUAPLATFORM)
+
 jansson_build:
 	@echo Compiling jansson
-	cd $(JANSSONLIBPATH) && make all
+	cd $(JANSSONLIBPATH) && $(MAKE) all
 
 mbedtls_build:
 	@echo Compiling mbedtls
-	cd $(MBEDTLSLIBPATH) && make all
-	
+	cd $(MBEDTLSLIBPATH) && $(MAKE) all
+
 cbor_build:
 	@echo Compiling tinycbor
-	cd $(CBORLIBPATH) && make all
-	
+	cd $(CBORLIBPATH) && $(MAKE) all
+
 .PHONY: all clean
 
 # easy printing of MAKE VARIABLES
-print-%: ; @echo $* = $($*) 
+print-%: ; @echo $* = $($*)
 
-$(OBJDIR)/%_NOSIMD.o : %.c $(OBJDIR)/%.d
+$(OBJDIR)/%_NOSIMD.o : %.c $(OBJDIR)/%_NOSIMD.d
 	$(CC) $(DEPFLAGS) $(CFLAGS) $(HARD_SWITCH_NOSIMD) -c -o $@ $<
+	$(POSTCOMPILE:%.d=%_NOSIMD.d)
 
-$(OBJDIR)/%_MMX.o : %.c $(OBJDIR)/%.d
+$(OBJDIR)/%_MMX.o : %.c $(OBJDIR)/%_MMX.d
 	$(CC) $(DEPFLAGS) $(CFLAGS) $(HARD_SWITCH_MMX) -c -o $@ $<
+	$(POSTCOMPILE:%.d=%_MMX.d)
 
-$(OBJDIR)/%_SSE2.o : %.c $(OBJDIR)/%.d
+$(OBJDIR)/%_SSE2.o : %.c $(OBJDIR)/%_SSE2.d
 	$(CC) $(DEPFLAGS) $(CFLAGS) $(HARD_SWITCH_SSE2) -c -o $@ $<
+	$(POSTCOMPILE:%.d=%_SSE2.d)
 
-$(OBJDIR)/%_AVX.o : %.c $(OBJDIR)/%.d
+$(OBJDIR)/%_AVX.o : %.c $(OBJDIR)/%_AVX.d
 	$(CC) $(DEPFLAGS) $(CFLAGS) $(HARD_SWITCH_AVX) -c -o $@ $<
+	$(POSTCOMPILE:%.d=%_AVX.d)
 
-$(OBJDIR)/%_AVX2.o : %.c $(OBJDIR)/%.d
+$(OBJDIR)/%_AVX2.o : %.c $(OBJDIR)/%_AVX2.d
 	$(CC) $(DEPFLAGS) $(CFLAGS) $(HARD_SWITCH_AVX2) -c -o $@ $<
+	$(POSTCOMPILE:%.d=%_AVX2.d)
 
-$(OBJDIR)/%_AVX512.o : %.c $(OBJDIR)/%.d
+$(OBJDIR)/%_AVX512.o : %.c $(OBJDIR)/%_AVX512.d
 	$(CC) $(DEPFLAGS) $(CFLAGS) $(HARD_SWITCH_AVX512) -c -o $@ $<
+	$(POSTCOMPILE:%.d=%_AVX512.d)
 
 %.o: %.c
 $(OBJDIR)/%.o : %.c $(OBJDIR)/%.d
@@ -360,7 +384,7 @@ $(OBJDIR)/%.o : %.cpp $(OBJDIR)/%.d
 $(OBJDIR)/%.o : %.m $(OBJDIR)/%.d
 	$(CC) $(DEPFLAGS) $(CFLAGS) -c -o $@ $<
 	$(POSTCOMPILE)
-	
+
 #$(CMDOBJS) $(COREOBJS): $(notdir $(%.c)) %.d
 #	$(CC) $(DEPFLAGS) $(CFLAGS) -c -o $@ $<
 #	$(POSTCOMPILE)
@@ -373,7 +397,8 @@ $(OBJDIR)/%.o : %.m $(OBJDIR)/%.d
 #	$(CXX) $(DEPFLAGS) $(CXXFLAGS) -c -o $@ $<
 #	$(POSTCOMPILE)
 
-DEPENDENCY_FILES = $(patsubst %.c, $(OBJDIR)/%.d, $(CORESRCS) $(CMDSRCS) $(ZLIBSRCS) $(MULTIARCHSRCS)) \
+DEPENDENCY_FILES = $(patsubst %.c, $(OBJDIR)/%.d, $(CORESRCS) $(CMDSRCS) $(ZLIBSRCS)) \
+	$(patsubst %.o, %.d, $(MULTIARCHOBJS)) \
 	$(patsubst %.cpp, $(OBJDIR)/%.d, $(QTGUISRCS)) \
 	$(patsubst %.m, $(OBJDIR)/%.d, $(OBJCSRCS)) \
 	$(OBJDIR)/proxmark3.d $(OBJDIR)/flash.d $(OBJDIR)/flasher.d $(OBJDIR)/fpga_compress.d

@@ -10,7 +10,7 @@
 // attacks this doesn't rely on implementation errors but only on the
 // inherent weaknesses of the crypto1 cypher. Described in
 //   Carlo Meijer, Roel Verdult, "Ciphertext-only Cryptanalysis on Hardened
-//   Mifare Classic Cards" in Proceedings of the 22nd ACM SIGSAC Conference on 
+//   Mifare Classic Cards" in Proceedings of the 22nd ACM SIGSAC Conference on
 //   Computer and Communications Security, 2015
 //-----------------------------------------------------------------------------
 //
@@ -19,7 +19,7 @@
 // - don't rollback. Start with 2nd byte of nonce instead
 // - reuse results of filter subfunctions
 // - reuse results of previous nonces if some first bits are identical
-// 
+//
 //-----------------------------------------------------------------------------
 // aczid's Copyright notice:
 //
@@ -50,16 +50,16 @@ THE SOFTWARE.
 #ifndef HARDNESTED_BF_CORE_H__
 #define HARDNESTED_BF_CORE_H__
 
-#include "hardnested_bruteforce.h"			// statelist_t
+#include "hardnested_bruteforce.h" // statelist_t
 
 typedef enum {
-	SIMD_AUTO,
-	SIMD_AVX512,
-	SIMD_AVX2,
-	SIMD_AVX,
-	SIMD_SSE2,
-	SIMD_MMX,
-	SIMD_NONE,
+    SIMD_AUTO,
+    SIMD_AVX512,
+    SIMD_AVX2,
+    SIMD_AVX,
+    SIMD_SSE2,
+    SIMD_MMX,
+    SIMD_NONE,
 } SIMDExecInstr;
 extern void SetSIMDInstr(SIMDExecInstr instr);
 extern SIMDExecInstr GetSIMDInstrAuto();

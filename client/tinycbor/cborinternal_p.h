@@ -39,24 +39,21 @@
 #ifndef CBOR_NO_HALF_FLOAT_TYPE
 #  ifdef __F16C__
 #    include <immintrin.h>
-static inline unsigned short encode_half(double val)
-{
+static inline unsigned short encode_half(double val) {
     return _cvtss_sh((float)val, 3);
 }
-static inline double decode_half(unsigned short half)
-{
+static inline double decode_half(unsigned short half) {
     return _cvtsh_ss(half);
 }
 #  else
 /* software implementation of float-to-fp16 conversions */
-static inline unsigned short encode_half(double val)
-{
+static inline unsigned short encode_half(double val) {
     uint64_t v;
     int sign, exp, mant;
     memcpy(&v, &val, sizeof(v));
     sign = v >> 63 << 15;
     exp = (v >> 52) & 0x7ff;
-    mant = v << 12 >> 12 >> (53-11);    /* keep only the 11 most significant bits of the mantissa */
+    mant = v << 12 >> 12 >> (53 - 11);  /* keep only the 11 most significant bits of the mantissa */
     exp -= 1023;
     if (exp == 1024) {
         /* infinity or NaN */
@@ -83,8 +80,7 @@ static inline unsigned short encode_half(double val)
 }
 
 /* this function was copied & adapted from RFC 7049 Appendix D */
-static inline double decode_half(unsigned short half)
-{
+static inline double decode_half(unsigned short half) {
     int exp = (half >> 10) & 0x1f;
     int mant = half & 0x3ff;
     double val;
@@ -147,7 +143,7 @@ enum {
     IndefiniteLength        = 31U,
 
     MajorTypeShift          = SmallValueBitLength,
-    MajorTypeMask           = (int) (~0U << MajorTypeShift),
+    MajorTypeMask           = (int)(~0U << MajorTypeShift),
 
     BreakByte               = (unsigned)Break | (SimpleTypesType << MajorTypeShift)
 };
@@ -155,7 +151,7 @@ enum {
 CBOR_INTERNAL_API CborError CBOR_INTERNAL_API_CC _cbor_value_extract_number(const uint8_t **ptr, const uint8_t *end, uint64_t *len);
 CBOR_INTERNAL_API CborError CBOR_INTERNAL_API_CC _cbor_value_prepare_string_iteration(CborValue *it);
 CBOR_INTERNAL_API CborError CBOR_INTERNAL_API_CC _cbor_value_get_string_chunk(const CborValue *value, const void **bufferptr,
-                                                                              size_t *len, CborValue *next);
+        size_t *len, CborValue *next);
 
 
 #endif /* CBORINTERNAL_P_H */
