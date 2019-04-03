@@ -63,3 +63,4 @@ client/lualibs/mf_default_keys.lua
 client/lualibs/usb_cmd.lua
 # recompiled
 fpga_version_info.c
+.vscode
