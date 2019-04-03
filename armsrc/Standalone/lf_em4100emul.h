@@ -17,6 +17,6 @@
 #include "apps.h" // debugstatements, lfops?
 
 
-#define OPTS 2
+#define OPTS 16
 
 #endif /* __LF_EM4100EMUL_H */

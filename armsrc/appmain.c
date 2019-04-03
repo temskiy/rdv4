@@ -417,21 +417,11 @@ void StandAloneMode(void) {
 	
 	DbpString("Stand-alone mode! No PC necessary.");
 	// Oooh pretty -- notify user we're in elite samy mode now
-	LED(LED_ORANGE, 200);
-	LED(LED_GREEN,	200);
-	LED(LED_RED,	200);
-	LED(LED_RED2,	200);
-	LED(LED_RED,	200);
-	LED(LED_GREEN,	200);
-	LED(LED_ORANGE, 200);
-	LED(LED_GREEN,	200);
-	LED(LED_RED,	200);
-	LED(LED_RED2,	200);
 	SpinDown(50);
-        SpinOff(50);
-        SpinUp(50);
-        SpinOff(50);
-        SpinDown(50);
+    SpinOff(50);
+    SpinUp(50);
+    SpinOff(50);
+    SpinDown(50);
 	SpinDelay(500);
 }
 // detection of which Standalone Modes is installed
