@@ -366,7 +366,8 @@ int CmdSetDebugMode(const char *Cmd) {
 }
 
 //by marshmellow
-// max output to 512 bits if we have more - should be plenty
+// max output to 512 bits if we have more
+// doesn't take inconsideration where the demod offset or bitlen found.
 void printDemodBuff(void) {
     int len = DemodBufferLen;
     if (len < 1) {
@@ -375,7 +376,7 @@ void printDemodBuff(void) {
     }
     if (len > 512) len = 512;
 
-    PrintAndLogEx(NORMAL, "%s", sprint_bin_break(DemodBuffer, len, 16));
+    PrintAndLogEx(NORMAL, "%s", sprint_bin_break(DemodBuffer, len, 32));
 }
 
 int CmdPrintDemodBuff(const char *Cmd) {
@@ -426,7 +427,7 @@ int CmdPrintDemodBuff(const char *Cmd) {
         }
         PrintAndLogEx(NORMAL, "DemodBuffer: %s", hex);
     } else {
-        PrintAndLogEx(NORMAL, "DemodBuffer:\n%s", sprint_bin_break(DemodBuffer + offset, length, 16));
+        PrintAndLogEx(NORMAL, "DemodBuffer:\n%s", sprint_bin_break(DemodBuffer + offset, length, 32));
     }
     return 1;
 }
@@ -458,7 +459,7 @@ int ASKDemod_ext(const char *Cmd, bool verbose, bool emSearch, uint8_t askType, 
     uint8_t bits[MAX_GRAPH_TRACE_LEN] = {0};
 
     sscanf(Cmd, "%i %i %i %i %c", &clk, &invert, &maxErr, &maxLen, &amp);
-    
+
     if (!maxLen) maxLen = BIGBUF_SIZE;
 
     if (invert != 0 && invert != 1) {
@@ -485,17 +486,17 @@ int ASKDemod_ext(const char *Cmd, bool verbose, bool emSearch, uint8_t askType, 
     if (amp == 'a') {
         askAmp(bits, BitLen);
     }
-        
+
     size_t ststart = 0, stend = 0;
 //    if (*stCheck)
     bool st = DetectST(bits, &BitLen, &foundclk, &ststart, &stend);
 
-    if ( clk == 0 ) {
-        if ( foundclk == 32 || foundclk == 64 ) {
+    if (clk == 0) {
+        if (foundclk == 32 || foundclk == 64) {
             clk = foundclk;
         }
     }
-    
+
     if (st) {
         *stCheck = st;
         CursorCPos = ststart;
@@ -530,7 +531,7 @@ int ASKDemod_ext(const char *Cmd, bool verbose, bool emSearch, uint8_t askType, 
             PrintAndLogEx(DEBUG, "ASK/Manchester - Clock: %d - Decoded bitstream:", clk);
         else
             PrintAndLogEx(DEBUG, "ASK/Raw - Clock: %d - Decoded bitstream:", clk);
-        // Now output the bitstream to the scrollback by line of 16 bits
+
         printDemodBuff();
     }
     uint64_t lo = 0;
@@ -599,7 +600,7 @@ int Cmdmandecoderaw(const char *Cmd) {
     }
 
     PrintAndLogEx(NORMAL, "Manchester Decoded - # errors:%d - data:", errCnt);
-    PrintAndLogEx(NORMAL, "%s", sprint_bin_break(bits, size, 16));
+    PrintAndLogEx(NORMAL, "%s", sprint_bin_break(bits, size, 32));
 
     if (errCnt == 0) {
         uint64_t id = 0;
@@ -614,17 +615,20 @@ int Cmdmandecoderaw(const char *Cmd) {
     return 1;
 }
 
-//by marshmellow
-//biphase decode
-//take 01 or 10 = 0 and 11 or 00 = 1
-//takes 2 arguments "offset" default = 0 if 1 it will shift the decode by one bit
-// and "invert" default = 0 if 1 it will invert output
-//  the argument offset allows us to manually shift if the output is incorrect - [EDIT: now auto detects]
+/*
+ *  @author marshmellow
+ * biphase decode
+ * decodes 01 or 10 -> ZERO
+ *         11 or 00 -> ONE
+ * param offset adjust start position
+ * param invert invert output
+ * param masxErr maximum tolerated errors
+ */
 int CmdBiphaseDecodeRaw(const char *Cmd) {
     size_t size = 0;
     int offset = 0, invert = 0, maxErr = 20, errCnt = 0;
     char cmdp = tolower(param_getchar(Cmd, 0));
-    if (strlen(Cmd) > 3 || cmdp == 'h') return usage_data_biphaserawdecode();
+    if (strlen(Cmd) > 5 || cmdp == 'h') return usage_data_biphaserawdecode();
 
     sscanf(Cmd, "%i %i %i", &offset, &invert, &maxErr);
     if (DemodBufferLen == 0) {
@@ -650,7 +654,7 @@ int CmdBiphaseDecodeRaw(const char *Cmd) {
         PrintAndLogEx(WARNING, "# Errors found during Demod (shown as " _YELLOW_("7")" in bit stream): %d", errCnt);
 
     PrintAndLogEx(NORMAL, "Biphase Decoded using offset: %d - # invert:%d - data:", offset, invert);
-    PrintAndLogEx(NORMAL, "%s", sprint_bin_break(bits, size, 16));
+    PrintAndLogEx(NORMAL, "%s", sprint_bin_break(bits, size, 32));
 
     //remove first bit from raw demod
     if (offset)
@@ -664,7 +668,7 @@ int CmdBiphaseDecodeRaw(const char *Cmd) {
 // - ASK Demod then Biphase decode GraphBuffer samples
 int ASKbiphaseDemod(const char *Cmd, bool verbose) {
     //ask raw demod GraphBuffer first
-    int offset = 0, clk = 0, invert = 0, maxErr = 0;
+    int offset = 0, clk = 0, invert = 0, maxErr = 100;
     sscanf(Cmd, "%i %i %i %i", &offset, &clk, &invert, &maxErr);
 
     uint8_t BitStream[MAX_DEMOD_BUF_LEN];
@@ -1094,7 +1098,9 @@ int CmdFSKrawdemod(const char *Cmd) {
 //attempt to psk1 demod graph buffer
 int PSKDemod(const char *Cmd, bool verbose) {
     int invert = 0, clk = 0, maxErr = 100;
+
     sscanf(Cmd, "%i %i %i", &clk, &invert, &maxErr);
+
     if (clk == 1) {
         invert = 1;
         clk = 0;
@@ -1107,28 +1113,29 @@ int PSKDemod(const char *Cmd, bool verbose) {
     if (getSignalProperties()->isnoise)
         return 0;
 
-    uint8_t BitStream[MAX_GRAPH_TRACE_LEN] = {0};
-    size_t BitLen = getFromGraphBuf(BitStream);
-    if (BitLen == 0) return 0;
-    int errCnt = 0;
+    uint8_t bits[MAX_GRAPH_TRACE_LEN] = {0};
+    size_t bitlen = getFromGraphBuf(bits);
+    if (bitlen == 0)
+        return 0;
+
     int startIdx = 0;
-    errCnt = pskRawDemod_ext(BitStream, &BitLen, &clk, &invert, &startIdx);
+    int errCnt = pskRawDemod_ext(bits, &bitlen, &clk, &invert, &startIdx);
     if (errCnt > maxErr) {
-        if (g_debugMode || verbose) PrintAndLogEx(DEBUG, "DEBUG: (PSKdemod) Too many errors found, clk: %d, invert: %d, numbits: %d, errCnt: %d", clk, invert, BitLen, errCnt);
+        if (g_debugMode || verbose) PrintAndLogEx(DEBUG, "DEBUG: (PSKdemod) Too many errors found, clk: %d, invert: %d, numbits: %d, errCnt: %d", clk, invert, bitlen, errCnt);
         return 0;
     }
-    if (errCnt < 0 || BitLen < 16) { //throw away static - allow 1 and -1 (in case of threshold command first)
-        if (g_debugMode || verbose) PrintAndLogEx(DEBUG, "DEBUG: (PSKdemod) no data found, clk: %d, invert: %d, numbits: %d, errCnt: %d", clk, invert, BitLen, errCnt);
+    if (errCnt < 0 || bitlen < 16) { //throw away static - allow 1 and -1 (in case of threshold command first)
+        if (g_debugMode || verbose) PrintAndLogEx(DEBUG, "DEBUG: (PSKdemod) no data found, clk: %d, invert: %d, numbits: %d, errCnt: %d", clk, invert, bitlen, errCnt);
         return 0;
     }
     if (verbose || g_debugMode) {
-        PrintAndLogEx(DEBUG, "DEBUG: (PSKdemod) Using Clock:%d, invert:%d, Bits Found:%d", clk, invert, BitLen);
+        PrintAndLogEx(DEBUG, "DEBUG: (PSKdemod) Using Clock:%d, invert:%d, Bits Found:%d", clk, invert, bitlen);
         if (errCnt > 0) {
             PrintAndLogEx(DEBUG, "DEBUG: (PSKdemod) errors during Demoding (shown as 7 in bit stream): %d", errCnt);
         }
     }
     //prime demod buffer for output
-    setDemodBuf(BitStream, BitLen, 0);
+    setDemodBuf(bits, bitlen, 0);
     setClockGrid(clk, startIdx);
     return 1;
 }
@@ -1313,7 +1320,10 @@ int CmdRawDemod(const char *Cmd) {
 void setClockGrid(int clk, int offset) {
     g_DemodStartIdx = offset;
     g_DemodClock = clk;
-    PrintAndLogEx(DEBUG, "DEBUG: (setClockGrid) demodoffset %d, clk %d", offset, clk);
+    if (clk == 0 && offset == 0)
+        PrintAndLogEx(DEBUG, "DEBUG: (setClockGrid) clear settings");
+    else
+        PrintAndLogEx(DEBUG, "DEBUG: (setClockGrid) demodoffset %d, clk %d", offset, clk);
 
     if (offset > clk) offset %= clk;
     if (offset < 0) offset += clk;

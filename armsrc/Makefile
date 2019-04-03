@@ -96,6 +96,12 @@ else
 	SRC_FPC =
 endif
 
+ifneq (,$(findstring WITH_LCD,$(APP_CLAGS)))
+    SRC_LCD = fonts.c LCD.c
+else
+    SRC_LCD =
+endif
+
 # Generic standalone Mode injection of source code
 SRC_STANDALONE =
 # WITH_LF_ICERUN
