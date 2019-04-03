@@ -57,7 +57,7 @@ extern void Dbprintf(const char *fmt, ...);
 #include "ui.h"
 # include "cmdparser.h"
 # include "cmddata.h"
-# define prnt PrintAndLog
+# define prnt(args...) PrintAndLogEx(DEBUG, ## args );
 #else
 uint8_t g_debugMode = 0;
 # define prnt Dbprintf
@@ -262,7 +262,8 @@ bool preambleSearch(uint8_t *bits, uint8_t *preamble, size_t pLen, size_t *size,
 //(iceman) FINDONE,  only finds start index. NOT SIZE!.  I see Em410xDecode (lfdemod.c) uses SIZE to determine success
 bool preambleSearchEx(uint8_t *bits, uint8_t *preamble, size_t pLen, size_t *size, size_t *startIdx, bool findone) {
     // Sanity check.  If preamble length is bigger than bits length.
-    if (*size <= pLen) return false;
+    if (*size <= pLen)
+        return false;
 
     uint8_t foundCnt = 0;
     for (size_t idx = 0; idx < *size - pLen; idx++) {
@@ -488,21 +489,21 @@ int DetectStrongAskClock(uint8_t *dest, size_t size, int high, int low, int *clo
 
     if (i == size)
         return -1;
-    
+
     // clock, numoftimes, first idx
     uint16_t tmpclk[10][3] = {
-        {8,   0, 0}, 
-        {16,  0, 0}, 
-        {32,  0, 0}, 
-        {40,  0, 0}, 
-        {50,  0, 0}, 
-        {64,  0, 0}, 
-        {100, 0, 0}, 
+        {8,   0, 0},
+        {16,  0, 0},
+        {32,  0, 0},
+        {40,  0, 0},
+        {50,  0, 0},
+        {64,  0, 0},
+        {100, 0, 0},
         {128, 0, 0},
-        {256, 0, 0}, 
+        {256, 0, 0},
         {384, 0, 0},
-      };
-    
+    };
+
     // loop through all samples (well, we don't want to go out-of-bounds)
     while (i < size - 512) {
         // measure from low to low
@@ -516,14 +517,14 @@ int DetectStrongAskClock(uint8_t *dest, size_t size, int high, int low, int *clo
             minClk = i - startwave;
             shortestWaveIdx = startwave;
         }
-        
+
         int foo = getClosestClock(minClk);
-        if (foo > 0 ) {
+        if (foo > 0) {
             for (uint8_t i = 0; i < 10; i++) {
-                if ( tmpclk[i][0] == foo ) {
+                if (tmpclk[i][0] == foo) {
                     tmpclk[i][1]++;
-                    
-                    if ( tmpclk[i][2] == 0) {
+
+                    if (tmpclk[i][2] == 0) {
                         tmpclk[i][2] = shortestWaveIdx;
                     }
                     break;
@@ -537,17 +538,17 @@ int DetectStrongAskClock(uint8_t *dest, size_t size, int high, int low, int *clo
     for (uint8_t i = 0; i < 10; i++) {
         if (g_debugMode == 2) {
             prnt("DEBUG, ASK,  clocks %u | hits %u | idx %u"
-                    , tmpclk[i][0]
-                    , tmpclk[i][1]
-                    , tmpclk[i][2]
-                    );
+                 , tmpclk[i][0]
+                 , tmpclk[i][1]
+                 , tmpclk[i][2]
+                );
         }
-        if ( max < tmpclk[i][1] ) {
+        if (max < tmpclk[i][1]) {
             *clock = tmpclk[i][0];
             shortestWaveIdx = tmpclk[i][2];
             max = tmpclk[i][1];
         }
-    }    
+    }
 
     if (*clock == 0)
         return -1;
@@ -967,11 +968,6 @@ int DetectPSKClock(uint8_t *dest, size_t size, int clock, size_t *firstPhaseShif
     uint8_t clk[] = {255, 16, 32, 40, 50, 64, 100, 128, 255}; //255 is not a valid clock
     uint16_t loopCnt = 4096;  //don't need to loop through entire array...
 
-    //if we already have a valid clock quit
-    size_t i = 1;
-    for (; i < 8; ++i)
-        if (clk[i] == clock) return clock;
-
     if (size < 160 + 20) return 0;
     // size must be larger than 20 here, and 160 later on.
     if (size < loopCnt) loopCnt = size - 20;
@@ -995,7 +991,7 @@ int DetectPSKClock(uint8_t *dest, size_t size, int clock, size_t *firstPhaseShif
     uint16_t peaksdet[] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
     //find start of modulating data in trace
-    i = findModStart(dest, size, *fc);
+    size_t i = findModStart(dest, size, *fc);
 
     firstFullWave = pskFindFirstPhaseShift(dest, size, curPhase, i, *fc, &fullWaveLen);
     if (firstFullWave == 0) {
@@ -1521,10 +1517,10 @@ int askdemod_ext(uint8_t *bits, size_t *size, int *clk, int *invert, int maxErr,
         if (g_debugMode == 2) prnt("DEBUG (askdemod_ext) just noise detected - aborting");
         return -2;
     }
-    
+
     int start = DetectASKClock(bits, *size, clk, maxErr);
     if (*clk == 0 || start < 0) return -3;
-   
+
     if (*invert != 1) *invert = 0;
 
     // amplify signal data.
@@ -1559,7 +1555,7 @@ int askdemod_ext(uint8_t *bits, size_t *size, int *clk, int *invert, int maxErr,
             *startIdx += *clk / 2 * alignPos;
 
             if (g_debugMode)
-                prnt("DEBUG: (askdemod_ext) CLEAN: startIdx %i, alignPos %u", *startIdx, alignPos);
+                prnt("DEBUG: (askdemod_ext) CLEAN: startIdx %i, alignPos %u , bestError %u", *startIdx, alignPos, errCnt);
         }
         return errCnt;
     }
