@@ -101,7 +101,7 @@ void SpinOff(uint32_t pause);
 void SpinErr(uint8_t led, uint32_t speed, uint8_t times);
 void SpinDown(uint32_t speed);
 void SpinUp(uint32_t speed);
-
+void FlashLEDs(uint32_t speed, uint8_t times);
 int BUTTON_CLICKED(int ms);
 int BUTTON_HELD(int ms);
 void FormatVersionInformation(char *dst, int len, const char *prefix, void *version_information);
