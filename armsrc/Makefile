@@ -45,7 +45,7 @@ APP_CFLAGS = $(PLATFORM_DEFS) \
 			 -DWITH_LF_EM4100EMUL \
 			 -DWITH_EMV \
 			 -DWITH_HFSNIFF \
-			 -fno-strict-aliasing -ffunction-sections -fdata-sections
+			 -fno-strict-aliasing -ffunction-sections -fdata-sections -Wno-unused-variable
 
 ### IMPORTANT -  move the commented variable below this line
 #			 -DWITH_FPC \

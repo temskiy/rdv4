@@ -455,7 +455,7 @@ void printStandAloneModes(void) {
     DbpString("   HF 14a sniff standalone with ULC/ULEV1/NTAG auth storing in flashmem - aka BogitoRun (Bogito)");
 #endif
 #if defined(WITH_LF_EM4100EMUL)
-    DbpString("   LF EM4100 sniff/sim/clone");
+    DbpString("   LF EM4100 read/simulate");
 #endif
 	//DbpString("Running ");	
 	//Dbprintf("  Is Device attached to USB| %s", USB_ATTACHED() ? "Yes" : "No"); 

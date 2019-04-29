@@ -13,7 +13,7 @@
 // BigBuf is the large multi-purpose buffer, typically used to hold A/D samples or traces.
 // Also used to hold various smaller buffers and the Mifare Emulator Memory.
 // declare it as uint32_t to achieve alignment to 4 Byte boundary
-static uint32_t BigBuf[BIGBUF_SIZE / sizeof(uint32_t)];
+// static uint32_t BigBuf[BIGBUF_SIZE / sizeof(uint32_t)];
 
 /* BigBuf memory layout:
 Pointer to highest available memory: BigBuf_hi

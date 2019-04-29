@@ -24,7 +24,7 @@
 #define MAX_MIFARE_PARITY_SIZE  3   // need 18 parity bits for the 18 Byte above. 3 Bytes are enough to store these
 #define CARD_MEMORY_SIZE        4096
 #define DMA_BUFFER_SIZE         256 //128  (how big is the dma?!?
-
+static uint32_t BigBuf[BIGBUF_SIZE / sizeof(uint32_t)];
 extern uint8_t *BigBuf_get_addr(void);
 extern uint8_t *BigBuf_get_EM_addr(void);
 extern uint16_t BigBuf_max_traceLen(void);

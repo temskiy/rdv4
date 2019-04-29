@@ -15,8 +15,8 @@
 //#include <stdbool.h> // for bool
 #include "standalone.h" // standalone definitions
 #include "apps.h" // debugstatements, lfops?
-
+// #include "../BigBuf.h"
 
 #define OPTS 16
-
+#define CLOCK 64
 #endif /* __LF_EM4100EMUL_H */

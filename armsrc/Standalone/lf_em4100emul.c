@@ -10,14 +10,67 @@
 // main code for LF ....
 //-----------------------------------------------------------------------------
 #include "lf_em4100emul.h"
+uint64_t low[OPTS];
+uint32_t high[OPTS];
+char str[17];
+int buflen;
 
+
+void FillBuff(int bit) {
+    
+    int i;
+    //set first half the clock bit (all 1's or 0's for a 0 or 1 bit)
+    for (i = 0; i < (int)(CLOCK / 2); ++i)
+        BigBuf[buflen++] = bit ;
+    //set second half of the clock bit (all 0's or 1's for a 0 or 1 bit)
+    for (i = (int)(CLOCK / 2); i < CLOCK; ++i)
+        BigBuf[buflen++] = bit ^ 1;
+}
+
+void ConstructEM410xEmulBuf(const char *uid) {
+
+    int i, j, binary[4], parity[4];
+    uint32_t n;
+    /* clear BigBuf */
+    BigBuf_Clear_ext(false);
+	buflen = 0;
+    /* write 9 start bits */
+    for (i = 0; i < 9; i++)
+        FillBuff(1);
+    /* for each hex char */
+    parity[0] = parity[1] = parity[2] = parity[3] = 0;
+    for (i = 0; i < 10; i++) {
+        /* read each hex char */
+        // sscanf(&uid[i], "%1lx", &n);
+		n = hex2int(uid[i]);
+        for (j = 3; j >= 0; j--, n /= 2)
+            binary[j] = n % 2;
+        /* append each bit */
+        FillBuff(binary[0]);
+        FillBuff(binary[1]);
+        FillBuff(binary[2]);
+        FillBuff(binary[3]);
+        /* append parity bit */
+        FillBuff(binary[0] ^ binary[1] ^ binary[2] ^ binary[3]);
+        /* keep track of column parity */
+        parity[0] ^= binary[0];
+        parity[1] ^= binary[1];
+        parity[2] ^= binary[2];
+        parity[3] ^= binary[3];
+    }
+    /* parity columns */
+    FillBuff(parity[0]);
+    FillBuff(parity[1]);
+    FillBuff(parity[2]);
+    FillBuff(parity[3]);
+    /* stop bit */
+    FillBuff(0);
+}
 
 void RunMod() {
 	StandAloneMode();
 	FpgaDownloadAndGo(FPGA_BITSTREAM_LF);
 
-	uint64_t low[OPTS];
-	uint32_t high[OPTS];
 	int selected = 0;
 	int state = 0; //0 - idle, 1 - read, 2 - sim
 
@@ -28,11 +81,9 @@ void RunMod() {
 	DbpString("[+] now in select mode");
 	for (;;) {		
 		WDT_HIT();
-
 		if (usb_poll_validate_length()) break;
 		int button_pressed = BUTTON_HELD(1000);
 		SpinDelay(300);
-		
 		switch (state){
 			case 0:
 				if (button_pressed > 0) {
@@ -48,7 +99,8 @@ void RunMod() {
 			break;
 			case 1:
 				CmdEM410xdemod(1, &high[selected], &low[selected], 0);
-				Dbprintf("[+] recorded to %x slot %x %x", selected, high[selected], low[selected]);
+				sprintf(str, "%02lx%08lx", (uint32_t) (low[selected] >> 32), (uint32_t) low[selected]);
+				Dbprintf("[+] recorded to %i slot %s", selected, str);
 				FlashLEDs(100,5);
 				state = 0;
 			break;
@@ -61,14 +113,14 @@ void RunMod() {
 					state = 1;
 				} else if (button_pressed < 0) {
 					LED(selected + 1, 0);
-					Dbprintf("[>] sim from %x slot", selected);
-
-
+					Dbprintf("[>] prepare for sim from %x slot", selected);
+					ConstructEM410xEmulBuf(str);
+					Dbprintf("[>] buffer generated from %x slot", selected);
+					FlashLEDs(100,5);
+					Dbprintf("[>] simulate from %x slot", selected);
+					SimulateTagLowFrequency(buflen, 0, 0);
 				}
 			break;
-
-
 		}
-
 	}
 }
