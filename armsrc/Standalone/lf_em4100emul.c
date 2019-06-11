@@ -12,7 +12,7 @@
 #include "lf_em4100emul.h"
 uint64_t low[OPTS];
 uint32_t high[OPTS];
-char str[17];
+char str[11];
 int buflen;
 
 
@@ -118,6 +118,7 @@ void RunMod() {
 					Dbprintf("[>] buffer generated from %x slot", selected);
 					FlashLEDs(100,5);
 					Dbprintf("[>] simulate from %x slot", selected);
+					Dbprintf("[>] buflen %i", buflen);
 					SimulateTagLowFrequency(buflen, 0, 0);
 				}
 			break;
