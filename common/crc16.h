@@ -10,7 +10,9 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include "util.h"
+#include <stdbool.h>
+#include <string.h>
+#include "commonutil.h"
 
 #define CRC16_POLY_CCITT  0x1021
 #define CRC16_POLY_LEGIC  0xc6c6 //0x6363
@@ -32,9 +34,9 @@ typedef enum {
 
 uint16_t update_crc16_ex(uint16_t crc, uint8_t c, uint16_t polynomial);
 uint16_t update_crc16(uint16_t crc, uint8_t c);
-uint16_t crc16(uint8_t const *message, size_t length, uint16_t remainder, uint16_t polynomial, bool refin, bool refout);
+uint16_t Crc16(uint8_t const *d, size_t length, uint16_t remainder, uint16_t polynomial, bool refin, bool refout);
 
-uint16_t crc(CrcType_t ct, const uint8_t *d, size_t n);
+uint16_t Crc16ex(CrcType_t ct, const uint8_t *d, size_t n);
 void compute_crc(CrcType_t ct, const uint8_t *d, size_t n, uint8_t *first, uint8_t *second);
 bool check_crc(CrcType_t ct, const uint8_t *d, size_t n);
 

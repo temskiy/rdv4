@@ -137,15 +137,15 @@ bool IsBlock0PCF7931(uint8_t *block) {
 bool IsBlock1PCF7931(uint8_t *block) {
     // assuming all RFU bits are set to 0
     if (block[10] == 0
-        && block[11] == 0 
-        && block[12] == 0 
-        && block[13] == 0) {
-        
-        if ( (block[14] & 0x7f) <= 9 
-              && block[15] <= 9) {
-                return true;
-            }
+            && block[11] == 0
+            && block[12] == 0
+            && block[13] == 0) {
+
+        if ((block[14] & 0x7f) <= 9
+                && block[15] <= 9) {
+            return true;
         }
+    }
     return false;
 }
 
@@ -295,7 +295,7 @@ end:
 
         Dbprintf("-----------------------------------------");
     }
-    cmd_send(CMD_ACK, 0, 0, 0, 0, 0);
+    reply_old(CMD_ACK, 0, 0, 0, 0, 0);
 }
 
 static void RealWritePCF7931(uint8_t *pass, uint16_t init_delay, int32_t l, int32_t p, uint8_t address, uint8_t byte, uint8_t data) {

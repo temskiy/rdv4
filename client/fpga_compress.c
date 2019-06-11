@@ -42,7 +42,7 @@
 #define COMPRESS_MAX_NICE_LENGTH  258
 #define COMPRESS_MAX_CHAIN        8192
 
-#define HARDNESTED_TABLE_SIZE (sizeof(uint32_t) * ((1L<<19)+1))
+#define HARDNESTED_TABLE_SIZE (uint32_t)(sizeof(uint32_t) * ((1L<<19)+1))
 
 static void usage(void) {
     fprintf(stdout, "Usage: fpga_compress <infile1> <infile2> ... <infile_n> <outfile>\n");
@@ -95,15 +95,13 @@ int zlib_compress(FILE *infile[], uint8_t num_infiles, FILE *outfile, bool hardn
         if (i >= num_infiles * (hardnested_mode ? HARDNESTED_TABLE_SIZE : FPGA_CONFIG_SIZE)) {
             if (hardnested_mode) {
                 fprintf(stderr,
-#if __WORDSIZE == 64
-                        "Input file too big (> %" PRIu64 " bytes). This is probably not a hardnested bitflip state table.\n"
-#else
-                        "Input file too big (> %lu bytes). This is probably not a hardnested bitflip state table.\n"
-#endif
+                        "Input file too big (> %" PRIu32 " bytes). This is probably not a hardnested bitflip state table.\n"
                         , HARDNESTED_TABLE_SIZE);
 
             } else {
-                fprintf(stderr, "Input files too big (total > %lu bytes). These are probably not PM3 FPGA config files.\n", num_infiles * FPGA_CONFIG_SIZE);
+                fprintf(stderr,
+                        "Input files too big (total > %li bytes). These are probably not PM3 FPGA config files.\n"
+                        , num_infiles * FPGA_CONFIG_SIZE);
             }
             for (uint16_t j = 0; j < num_infiles; j++) {
                 fclose(infile[j]);
@@ -206,6 +204,8 @@ int zlib_decompress(FILE *infile, FILE *outfile) {
     compressed_fpga_stream.opaque = Z_NULL;
 
     ret = inflateInit2(&compressed_fpga_stream, 0);
+    if (ret < 0)
+        return (EXIT_FAILURE);
 
     do {
         if (compressed_fpga_stream.avail_in == 0) {
@@ -397,10 +397,6 @@ static int generate_fpga_version_info(FILE *infile[], char *infile_names[], int 
 }
 
 int main(int argc, char **argv) {
-    FILE **infiles;
-    char **infile_names;
-    FILE *outfile;
-
     if (argc == 1 || argc == 2) {
         usage();
         return (EXIT_FAILURE);
@@ -408,7 +404,7 @@ int main(int argc, char **argv) {
 
     if (!strcmp(argv[1], "-d")) { // Decompress
 
-        infiles = calloc(1, sizeof(FILE *));
+        FILE **infiles = calloc(1, sizeof(FILE *));
         if (argc != 4) {
             usage();
             free(infiles);
@@ -417,16 +413,16 @@ int main(int argc, char **argv) {
         infiles[0] = fopen(argv[2], "rb");
         if (infiles[0] == NULL) {
             fprintf(stderr, "Error. Cannot open input file %s\n\n", argv[2]);
-            free(infiles);          
+            free(infiles);
             return (EXIT_FAILURE);
         }
-        outfile = fopen(argv[3], "wb");
+        FILE *outfile = fopen(argv[3], "wb");
         if (outfile == NULL) {
             fprintf(stderr, "Error. Cannot open output file %s\n\n", argv[3]);
-            free(infiles);            
+            free(infiles);
             return (EXIT_FAILURE);
         }
-        
+
         int ret = zlib_decompress(infiles[0], outfile);
         free(infiles);
         return (ret);
@@ -450,8 +446,8 @@ int main(int argc, char **argv) {
             num_input_files = argc - 2;
         }
 
-        infiles = calloc(num_input_files, sizeof(FILE *));
-        infile_names = calloc(num_input_files, sizeof(char *));
+        FILE **infiles = calloc(num_input_files, sizeof(FILE *));
+        char **infile_names = calloc(num_input_files, sizeof(char *));
         for (uint16_t i = 0; i < num_input_files; i++) {
             infile_names[i] = argv[i + ((hardnested_mode || generate_version_file) ? 2 : 1)];
             infiles[i] = fopen(infile_names[i], "rb");
@@ -462,17 +458,17 @@ int main(int argc, char **argv) {
                 return (EXIT_FAILURE);
             }
         }
-        outfile = fopen(argv[argc - 1], "wb");
+        FILE *outfile = fopen(argv[argc - 1], "wb");
         if (outfile == NULL) {
             fprintf(stderr, "Error. Cannot open output file %s\n\n", argv[argc - 1]);
             free(infile_names);
-            free(infiles);          
+            free(infiles);
             return (EXIT_FAILURE);
         }
         if (generate_version_file) {
             if (generate_fpga_version_info(infiles, infile_names, num_input_files, outfile)) {
                 free(infile_names);
-                free(infiles);                
+                free(infiles);
                 return (EXIT_FAILURE);
             }
         } else {

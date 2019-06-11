@@ -138,7 +138,7 @@ static void hitag_send_bit(int bit) {
 
 static void hitag_send_frame(const uint8_t *frame, size_t frame_len) {
     // SOF - send start of frame
-        hitag_send_bit(1);
+    hitag_send_bit(1);
     hitag_send_bit(1);
     hitag_send_bit(1);
     hitag_send_bit(1);
@@ -399,10 +399,10 @@ static bool hitag2_write_page(uint8_t *rx, const size_t rxlen, uint8_t *tx, size
             break;
         case WRITE_STATE_PAGENUM_WRITTEN:
             // Check if page number was received correctly
-            if (   (rxlen == 10) 
-                && (rx[0] == (0x82 | (blocknr << 3) | ((blocknr ^ 7) >> 2)))
-                && (rx[1] == (((blocknr & 0x3) ^ 0x3) << 6))) {
-                    
+            if ((rxlen == 10)
+                    && (rx[0] == (0x82 | (blocknr << 3) | ((blocknr ^ 7) >> 2)))
+                    && (rx[1] == (((blocknr & 0x3) ^ 0x3) << 6))) {
+
                 *txlen = 32;
                 memset(tx, 0, HITAG_FRAME_LEN);
                 memcpy(tx, writedata, 4);
@@ -681,7 +681,7 @@ static bool hitag2_read_uid(uint8_t *rx, const size_t rxlen, uint8_t *tx, size_t
 }
 
 // Hitag2 Sniffing
-void SniffHitag(uint32_t type) {
+void SniffHitag(void) {
 
     StopTicks();
 
@@ -751,7 +751,7 @@ void SniffHitag(uint32_t type) {
     bSkip = true;
     tag_sof = 4;
 
-    while (!BUTTON_PRESS() && !usb_poll_validate_length()) {
+    while (!BUTTON_PRESS() && !data_available()) {
         // Watchdog hit
         WDT_HIT();
 
@@ -978,7 +978,7 @@ void SimulateHitagTag(bool tag_mem_supplied, uint8_t *data) {
     // synchronized startup procedure
     while (AT91C_BASE_TC0->TC_CV > 0) {}; // wait until TC0 returned to zero
 
-    while (!BUTTON_PRESS() && !usb_poll_validate_length()) {
+    while (!BUTTON_PRESS() && !data_available()) {
         // Watchdog hit
         WDT_HIT();
 
@@ -1203,7 +1203,7 @@ void ReaderHitag(hitag_function htf, hitag_data *htd) {
     }
     uint8_t attempt_count = 0;
 
-    while (!bStop && !BUTTON_PRESS() && !usb_poll_validate_length()) {
+    while (!bStop && !BUTTON_PRESS() && !data_available()) {
 
         WDT_HIT();
 
@@ -1280,7 +1280,7 @@ void ReaderHitag(hitag_function htf, hitag_data *htd) {
 
         // Receive frame, watch for at most T0*EOF periods
         while (AT91C_BASE_TC1->TC_CV < T0 * HITAG_T_WAIT_MAX) {
-            
+
             // Check if falling edge in tag modulation is detected
             if (AT91C_BASE_TC1->TC_SR & AT91C_TC_LDRAS) {
                 // Retrieve the new timing values
@@ -1350,9 +1350,9 @@ out:
     StartTicks();
 
     if (bSuccessful)
-        cmd_send(CMD_ACK, bSuccessful, 0, 0, (uint8_t *)tag.sectors, 48);
+        reply_old(CMD_ACK, bSuccessful, 0, 0, (uint8_t *)tag.sectors, 48);
     else
-        cmd_send(CMD_ACK, bSuccessful, 0, 0, 0, 0);
+        reply_old(CMD_ACK, bSuccessful, 0, 0, 0, 0);
 }
 
 void WriterHitag(hitag_function htf, hitag_data *htd, int page) {
@@ -1366,9 +1366,7 @@ void WriterHitag(hitag_function htf, hitag_data *htd, int page) {
     uint8_t *tx = txbuf;
     size_t txlen = 0;
     int lastbit;
-    bool bSkip;
     int reset_sof;
-    int tag_sof;
     int t_wait = HITAG_T_WAIT_MAX;
     bool bStop;
 
@@ -1464,7 +1462,7 @@ void WriterHitag(hitag_function htf, hitag_data *htd, int page) {
         return;
     }
 
-    while (!bStop && !BUTTON_PRESS() && !usb_poll_validate_length()) {
+    while (!bStop && !BUTTON_PRESS() && !data_available()) {
 
         WDT_HIT();
 
@@ -1515,8 +1513,8 @@ void WriterHitag(hitag_function htf, hitag_data *htd, int page) {
         memset(rx, 0x00, sizeof(rx));
         rxlen = 0;
         lastbit = 1;
-        bSkip = true;
-        tag_sof = reset_sof;
+        bool bSkip = true;
+        int tag_sof = reset_sof;
         response = 0;
         uint32_t errorCount = 0;
 
@@ -1613,5 +1611,5 @@ void WriterHitag(hitag_function htf, hitag_data *htd, int page) {
 
     StartTicks();
 
-    cmd_send(CMD_ACK, bSuccessful, 0, 0, (uint8_t *)tag.sectors, 48);
+    reply_old(CMD_ACK, bSuccessful, 0, 0, (uint8_t *)tag.sectors, 48);
 }

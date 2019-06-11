@@ -14,7 +14,7 @@
 // Might as well have the hardware-specific defines everywhere.
 #include "at91sam7s512.h"
 #include "config_gpio.h"
-#include "usb_cmd.h"
+#include "pm3_cmd.h"
 
 #define WDT_HIT()                               AT91C_BASE_WDTC->WDTC_WDCR = 0xa5000001
 
@@ -108,7 +108,7 @@
 //NVDD goes LOW when USB is attached.
 #define USB_ATTACHED()    !((AT91C_BASE_PIOA->PIO_PDSR & GPIO_NVDD_ON) == GPIO_NVDD_ON)
 
-#define VERSION_INFORMATION_MAGIC 0x56334d50
+#define VERSION_INFORMATION_MAGIC 0x56334d50 // "PM3V"
 struct version_information {
     int magic; /* Magic sequence to identify this as a correct version information structure. Must be VERSION_INFORMATION_MAGIC */
     char versionversion; /* Must be 1 */
@@ -118,7 +118,7 @@ struct version_information {
     char buildtime[30]; /* string with the build time */
 } __attribute__((packed));
 
-#define COMMON_AREA_MAGIC 0x43334d50
+#define COMMON_AREA_MAGIC 0x43334d50 // "PM3C"
 #define COMMON_AREA_COMMAND_NONE 0
 #define COMMON_AREA_COMMAND_ENTER_FLASH_MODE 1
 struct common_area {
@@ -128,6 +128,7 @@ struct common_area {
     struct {
         unsigned int bootrom_present: 1; /* Set when a bootrom that is capable of parsing the common area is present */
         unsigned int osimage_present: 1; /* Set when a osimage that is capable of parsing the common area is present */
+        unsigned int button_pressed: 1;
     } __attribute__((packed)) flags;
     int arg1, arg2;
 } __attribute__((packed));

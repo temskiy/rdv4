@@ -10,7 +10,7 @@
 //
 // PROXMARK3 - HID CORPORATE 1000 BRUTEFORCER (STAND-ALONE MODE)
 //
-// This version of Proxmark3 firmware adds one extra stand-alone mode to proxmark3 firmware.
+// This version of Proxmark3 firmware adds one extra stand-alone mode.
 // The new stand-alone mode allows to execute a bruteforce on HID Corporate 1000 readers, by
 // reading a specific badge and bruteforcing the Card Number (incrementing and decrementing it),
 // mainteining the same Facility Code of the original badge.
@@ -25,6 +25,10 @@
 // main code for LF aka HID corporate brutefore by Federico Dotta & Maurizio Agazzini
 //-----------------------------------------------------------------------------------
 #include "lf_hidbrute.h"
+
+void ModInfo(void) {
+    DbpString("   LF HID corporate 1000 bruteforce - aka Corporatebrute (Federico dotta & Maurizio Agazzini)");
+}
 
 // samy's sniff and repeat routine for LF
 void RunMod() {
@@ -44,7 +48,7 @@ void RunMod() {
         WDT_HIT();
 
         // exit from SamyRun,   send a usbcommand.
-        if (usb_poll_validate_length()) break;
+        if (data_available()) break;
 
         // Was our button held down or pressed?
         int button_pressed = BUTTON_HELD(1000);
@@ -54,7 +58,7 @@ void RunMod() {
         if (button_pressed > 0 && cardRead == 0) {
             LEDsoff();
             LED(selected + 1, 0);
-            LED(LED_RED2, 0);
+            LED(LED_D, 0);
 
             // record
             DbpString("[=] starting recording");
@@ -79,7 +83,7 @@ void RunMod() {
         } else if (button_pressed > 0 && cardRead == 1) {
             LEDsoff();
             LED(selected + 1, 0);
-            LED(LED_ORANGE, 0);
+            LED(LED_A, 0);
 
             // record
             Dbprintf("[=] cloning %x %x %08x", selected, high[selected], low[selected]);
@@ -118,7 +122,7 @@ void RunMod() {
             // Begin transmitting
             if (playing && selected != 2) {
 
-                LED(LED_GREEN, 0);
+                LED(LED_B, 0);
                 DbpString("[=] playing");
 
                 // wait for button to be released
@@ -151,7 +155,7 @@ void RunMod() {
                     continue;
                 }
 
-                LED(LED_GREEN, 0);
+                LED(LED_B, 0);
                 DbpString("[=] entering bruteforce mode");
                 // wait for button to be released
                 while (BUTTON_PRESS())

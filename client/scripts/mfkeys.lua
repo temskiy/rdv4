@@ -1,5 +1,5 @@
 --[[
-    This is an example of Lua-scripting within proxmark3. This is a lua-side
+    This is an example of Lua-scripting within Proxmark3. This is a lua-side
     implementation of hf mf chk
 
     This code is licensed to you under the terms of the GNU GPL, version 2 or,
@@ -8,100 +8,102 @@
 
     Copyright (C) 2013 m h swende <martin at swende.se>
 --]]
--- Loads the commands-library
 local cmds = require('commands')
--- Load the default keys
 local keylist = require('mf_default_keys')
--- Ability to read what card is there
 local lib14a = require('read14a')
 local getopt = require('getopt')
--- Asks the user for input
 local utils = require('utils')
 
-example =[[
-     script run mfkeys
-]]
+copyright = ''
 author = "Holiman"
-usage = "script run mfkeys"
+version = 'v1.0.1'
 desc = ("This script implements Mifare check keys.\
 It utilises a large list of default keys (currently %d keys).\
-If you want to add more, just put them inside /lualibs/mf_default_keys.lua\n"):format(#keylist) ..
-[[
-
+If you want to add more, just put them inside /lualibs/mf_default_keys.lua\n"):format(#keylist)
+example = [[
+    1. script run mfkeys
+]]
+usage = [[
 Arguments:
     -h             : this help
     -p             : print keys
 ]]
 
+local PM3_SUCCESS = 0 -- needs to be refactored into own like pm3_cmd
+
 local TIMEOUT = 10000 -- 10 seconds
 ---
 -- This is only meant to be used when errors occur
 local function oops(err)
-    print('ERROR: ',err)
-    return nil,err
+    print('ERROR:', err)
+    core.clearCommandBuffer()
+    return nil, err
 end
 ---
 -- Usage help
 local function help()
+    print(copyright)
+    print(author)
+    print(version)
     print(desc)
-    print("Example usage")
+    print('Example usage')
     print(example)
+    print(usage)
 end
 --
 -- waits for answer from pm3 device
-local function checkCommand(command)
-    core.clearCommandBuffer()
-    local usb = command:getBytes()
-    core.SendCommand(usb)
-    local result = core.WaitForResponseTimeout(cmds.CMD_ACK, TIMEOUT)
-    if result then
-        local count, cmd, arg0 = bin.unpack('LL',result)
-        if(arg0==1) then
-            local count, arg1, arg2, data = bin.unpack('LLH511',result,count)
-            key = data:sub(1,12)
-            return key
-        else
-            return nil
-        end
-    else
+local function checkCommand(response)
+    if not response then
         print("Timeout while waiting for response. Increase TIMEOUT in mfkeys.lua to wait longer")
         return nil, "Timeout while waiting for device to respond"
     end
-end
 
-local function checkBlock(blockno, testkeys, keytype)
-
-    -- The command data is only 512 bytes, each key is 6 bytes, meaning that we can send max 85 keys in one go.
-    -- If there's more, we need to split it up
-    local arg1 = bit32.bor(bit32.lshift(keytype, 8), blockno)
-
-    local start, remaining = 1, #testkeys
-    local chunksize = remaining
-    if remaining > 85 then chunksize = 85 end
-    local n = chunksize
-
-    while remaining > 0 do
-        --print('start', start, 'chunksize', chunksize, 'testkeys kvar', remaining, 'N-index=', n)
-
-        local d1 = table.concat(testkeys, "", start, n)
-
-        print(("Testing block %d, keytype %d, with %d keys"):format(blockno, keytype, chunksize))
-        local command = Command:new{cmd = cmds.CMD_MIFARE_CHKKEYS,
-                                arg1 =  arg1,
-                                arg2 = 0,
-                                arg3 = chunksize,
-                                data = d1}
-        local status = checkCommand(command)
-        if status then return status, blockno end
-        start = start + chunksize
-        remaining = remaining - chunksize
-
-        if remaining < 85 then chunksize = remaining end
-        n = n + chunksize
+    if response.Status == PM3_SUCCESS then
+        --decode data array
+        key = response.Data:sub(1, 12)
+        found = tonumber(response.Data:sub(13,14))
+        if found == 1 then
+            return key
+        end
     end
     return nil
 end
 
+local function checkBlock(blockno, testkeys, keytype)
+
+    -- The command data is only 512 bytes,
+    -- each key is 6 bytes,
+    -- NG args inside dataarray is 4 bytes.  That give us (512-4)/6 or max 84 keys in one go.
+    -- If there's more, we need to split it up
+    local start, remaining = 1, #testkeys
+    local maxchunk = math.floor((512-4)/6)
+    local chunksize = remaining
+    if remaining > maxchunk then chunksize = maxchunk end
+    local n = chunksize
+
+    while remaining > 0 do
+
+        local d0 = ('%02X%02X00%02X'):format(keytype, blockno, chunksize)
+        local d1 = table.concat(testkeys, "", start, n)
+
+        core.clearCommandBuffer()
+
+        print(("Testing block %d, keytype %d, with %d keys"):format(blockno, keytype, chunksize))
+
+        local c = Command:newNG{cmd = cmds.CMD_MIFARE_CHKKEYS, data = d0..d1}
+        key, err = checkCommand(c:sendNG(false))
+
+        if key then return key, blockno end
+
+        start = start + chunksize
+        remaining = remaining - chunksize
+
+        if remaining < maxchunk then chunksize = remaining end
+        n = n + chunksize
+    end
+    return nil
+end
+---
 -- A function to display the results
 local function display_results(keys)
     local sector, keyA, keyB, succA, succB
@@ -116,6 +118,7 @@ local function display_results(keys)
     end
     print('|---|----------------|---|----------------|---|')
 end
+---
 -- A little helper to place an item first in the list
 local function placeFirst(akey, list)
     akey = akey:lower()
@@ -179,12 +182,16 @@ local function dumptofile(keys)
         file:close()
     end
 end
+---
+--
 local function printkeys()
     for i=1, #keylist do
         print(i, keylist[i])
     end
     print ('Number of keys: '..#keylist)
 end
+---
+--
 local function perform_check(numsectors)
 
     local keyType = 0 -- A=0, B=1
@@ -194,6 +201,10 @@ local function perform_check(numsectors)
     for i = 0, numsectors-1 do
         keys[i] = {0,0,'',''}
     end
+
+    core.fast_push_mode(true)
+
+    local start_time = os.time()
 
     for sector = 0, #keys do
         -- Check if user aborted
@@ -216,6 +227,12 @@ local function perform_check(numsectors)
 
         keys[sector] = {succA, succB, keyA, keyB}
     end
+
+    local end_time = os.time()
+    print('')
+    print('[+] mfkeys - Checkkey execution time: '..os.difftime(end_time, start_time)..' sec')
+
+    core.fast_push_mode(false)
 
     display_results(keys)
 
@@ -251,13 +268,12 @@ end
 -- The main entry point
 local function main(args)
 
-    local start_time = os.time()
     local numSectors = 16
 
     -- Arguments for the script
     for o, a in getopt.getopt(args, 'hp') do
-        if o == "h" then return help() end
-        if o == "p" then return printkeys() end
+        if o == 'h' then return help() end
+        if o == 'p' then return printkeys() end
     end
     -- identify tag
     tag, err = lib14a.read(false, true)
@@ -267,9 +283,6 @@ local function main(args)
     numsectors = taginfo(tag)
 
     perform_check(numsectors)
-
-    local end_time = os.time()
-    print('mfkeys - Total execution time: '..os.difftime(end_time, start_time)..' sec')
 end
 
 main( args)

@@ -21,7 +21,8 @@
 
 static int CmdHelp(const char *Cmd);
 
-int CmdTIDemod(const char *Cmd) {
+static int CmdTIDemod(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
     /* MATLAB as follows:
       f_s = 2000000;  % sampling frequency
       f_l = 123200;   % low FSK tone
@@ -86,7 +87,7 @@ int CmdTIDemod(const char *Cmd) {
     int i, j, TagType;
     int lowSum = 0, highSum = 0;;
     int lowTot = 0, highTot = 0;
-    int retval = 0;
+    int retval = PM3_ESOFT;
 
     for (i = 0; i < GraphTraceLen - convLen; i++) {
         lowSum = 0;
@@ -138,7 +139,6 @@ int CmdTIDemod(const char *Cmd) {
     // look for 17 low bits followed by 6 highs (common pattern for ro and rw tags)
     int max = 0, maxPos = 0;
     for (i = 0; i < 6000; i++) {
-        int j;
         int dec = 0;
         // searching 17 consecutive lows
         for (j = 0; j < 17 * lowLen; j++) {
@@ -177,9 +177,7 @@ int CmdTIDemod(const char *Cmd) {
     uint32_t shift3 = 0x7e000000, shift2 = 0, shift1 = 0, shift0 = 0;
 
     for (i = 0; i < ARRAYLEN(bits) - 1; i++) {
-        int high = 0;
-        int low = 0;
-        int j;
+        int high = 0, low = 0;
         for (j = 0; j < lowLen; j++) {
             low -= GraphBuffer[maxPos + j];
         }
@@ -218,7 +216,7 @@ int CmdTIDemod(const char *Cmd) {
         goto out;
     } else if (TagType == 0x7E) {
         PrintAndLogEx(INFO, "Readonly TI tag detected.");
-        retval = 1;
+        retval = PM3_SUCCESS;
         goto out;
     } else if (TagType == 0xFE) {
         PrintAndLogEx(INFO, "Rewriteable TI tag detected.");
@@ -254,67 +252,72 @@ int CmdTIDemod(const char *Cmd) {
 
         //crc =  crc16_ccitt(message, sizeof(message);
 
-        char *crcStr = (crc == (shift2 & 0xFFFF)) ? _GREEN_("Passed") : _RED_("Failed");
+        const char *crcStr = (crc == (shift2 & 0xFFFF)) ? _GREEN_("Passed") : _RED_("Fail");
 
         PrintAndLogEx(INFO, "Tag data = %08X%08X  [Crc %04X %s]", shift1, shift0, crc, crcStr);
 
         if (crc != (shift2 & 0xFFFF))
             PrintAndLogEx(WARNING, "Error: CRC mismatch, calculated %04X, got %04X", crc, shift2 & 0xFFFF);
 
-        retval = 1;
+        retval = PM3_SUCCESS;
         goto out;
     } else {
         PrintAndLogEx(WARNING, "Unknown tag type.");
     }
 
 out:
-    if (retval == 0)
+    if (retval != PM3_SUCCESS)
         save_restoreGB(GRAPH_RESTORE);
 
     return retval;
 }
 
 // read a TI tag and return its ID
-int CmdTIRead(const char *Cmd) {
-    UsbCommand c = {CMD_READ_TI_TYPE};
+static int CmdTIRead(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
     clearCommandBuffer();
-    SendCommand(&c);
-    return 0;
+    SendCommandNG(CMD_READ_TI_TYPE, NULL, 0);
+    return PM3_SUCCESS;
 }
 
 // write new data to a r/w TI tag
-int CmdTIWrite(const char *Cmd) {
+static int CmdTIWrite(const char *Cmd) {
     int res = 0;
-    UsbCommand c = {CMD_WRITE_TI_TYPE};
-    res = sscanf(Cmd, "%012" SCNx64 " %012" SCNx64 " %012" SCNx64 "", &c.arg[0], &c.arg[1], &c.arg[2]);
+    uint64_t arg0, arg1, arg2;
+    res = sscanf(Cmd, "%012" SCNx64 " %012" SCNx64 " %012" SCNx64 "", &arg0, &arg1, &arg2);
 
     if (res == 2)
-        c.arg[2] = 0;
+        arg2 = 0;
 
     if (res < 2) {
         PrintAndLogEx(WARNING, "Please specify the data as two hex strings, optionally the CRC as a third");
-        return 1;
+        return PM3_EINVARG;
     }
     clearCommandBuffer();
-    SendCommand(&c);
-    return 0;
+    SendCommandMIX(CMD_WRITE_TI_TYPE, arg0, arg1, arg2, NULL, 0);
+    return PM3_SUCCESS;
 }
 
 static command_t CommandTable[] = {
-    {"help",      CmdHelp,        1, "This help"},
-    {"demod",     CmdTIDemod,     1, "Demodulate raw bits for TI-type LF tag from the GraphBuffer"},
-    {"read",      CmdTIRead,      0, "Read and decode a TI 134 kHz tag"},
-    {"write",     CmdTIWrite,     0, "Write new data to a r/w TI 134 kHz tag"},
-    {NULL, NULL, 0, NULL}
+    {"help",      CmdHelp,        AlwaysAvailable, "This help"},
+    {"demod",     CmdTIDemod,     AlwaysAvailable, "Demodulate raw bits for TI-type LF tag from the GraphBuffer"},
+    {"read",      CmdTIRead,      IfPm3Lf,         "Read and decode a TI 134 kHz tag"},
+    {"write",     CmdTIWrite,     IfPm3Lf,         "Write new data to a r/w TI 134 kHz tag"},
+    {NULL, NULL, NULL, NULL}
 };
+
+static int CmdHelp(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
+    CmdsHelp(CommandTable);
+    return PM3_SUCCESS;
+}
 
 int CmdLFTI(const char *Cmd) {
     clearCommandBuffer();
-    CmdsParse(CommandTable, Cmd);
-    return 0;
+    return CmdsParse(CommandTable, Cmd);
 }
 
-int CmdHelp(const char *Cmd) {
-    CmdsHelp(CommandTable);
-    return 0;
+int demodTI(void) {
+    return CmdTIDemod("");
 }
+

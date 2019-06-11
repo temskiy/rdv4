@@ -8,19 +8,46 @@
 
 #include <proxmark3.h>
 #include "usb_cdc.h"
-#include "cmd.h"
 
 struct common_area common_area __attribute__((section(".commonarea")));
 unsigned int start_addr, end_addr, bootrom_unlocked;
 extern char _bootrom_start, _bootrom_end, _flash_start, _flash_end;
 extern uint32_t _osimage_entry;
 
+static int reply_old(uint64_t cmd, uint64_t arg0, uint64_t arg1, uint64_t arg2, void *data, size_t len) {
+    PacketResponseOLD txcmd;
+
+    for (size_t i = 0; i < sizeof(PacketResponseOLD); i++)
+        ((uint8_t *)&txcmd)[i] = 0x00;
+
+    // Compose the outgoing command frame
+    txcmd.cmd = cmd;
+    txcmd.arg[0] = arg0;
+    txcmd.arg[1] = arg1;
+    txcmd.arg[2] = arg2;
+
+    // Add the (optional) content to the frame, with a maximum size of PM3_CMD_DATA_SIZE
+    if (data && len) {
+        len = MIN(len, PM3_CMD_DATA_SIZE);
+        for (size_t i = 0; i < len; i++) {
+            txcmd.d.asBytes[i] = ((uint8_t *)data)[i];
+        }
+    }
+
+    int result = PM3_EUNDEF;
+    // Send frame and make sure all bytes are transmitted
+
+    result = usb_write((uint8_t *)&txcmd, sizeof(PacketResponseOLD));
+
+    return result;
+}
+
 void DbpString(char *str) {
     uint8_t len = 0;
     while (str[len] != 0x00)
         len++;
 
-    cmd_send(CMD_DEBUG_PRINT_STRING, len, 0, 0, (uint8_t *)str, len);
+    reply_old(CMD_DEBUG_PRINT_STRING, len, 0, 0, (uint8_t *)str, len);
 }
 
 static void ConfigClocks(void) {
@@ -86,10 +113,9 @@ static void Fatal(void) {
 
 void UsbPacketReceived(uint8_t *packet, int len) {
     int i, dont_ack = 0;
-    UsbCommand *c = (UsbCommand *)packet;
-    volatile uint32_t *p;
+    PacketCommandOLD *c = (PacketCommandOLD *)packet;
 
-    //if ( len != sizeof(UsbCommand)) Fatal();
+    //if ( len != sizeof(PacketCommandOLD`)) Fatal();
 
     uint32_t arg0 = (uint32_t)c->arg[0];
 
@@ -101,7 +127,7 @@ void UsbPacketReceived(uint8_t *packet, int len) {
             if (common_area.flags.osimage_present)
                 arg0 |= DEVICE_INFO_FLAG_OSIMAGE_PRESENT;
 
-            cmd_send(CMD_DEVICE_INFO, arg0, 1, 2, 0, 0);
+            reply_old(CMD_DEVICE_INFO, arg0, 1, 2, 0, 0);
         }
         break;
 
@@ -109,7 +135,7 @@ void UsbPacketReceived(uint8_t *packet, int len) {
             /* The temporary write buffer of the embedded flash controller is mapped to the
             * whole memory region, only the last 8 bits are decoded.
             */
-            p = (volatile uint32_t *)&_flash_start;
+            volatile uint32_t *p = (volatile uint32_t *)&_flash_start;
             for (i = 0; i < 12; i++)
                 p[i + arg0] = c->d.asDwords[i];
         }
@@ -128,7 +154,7 @@ void UsbPacketReceived(uint8_t *packet, int len) {
                 if (((flash_address + AT91C_IFLASH_PAGE_SIZE - 1) >= end_addr) || (flash_address < start_addr)) {
                     /* Disallow write */
                     dont_ack = 1;
-                    cmd_send(CMD_NACK, 0, 0, 0, 0, 0);
+                    reply_old(CMD_NACK, 0, 0, 0, 0, 0);
                 } else {
                     uint32_t page_n = (flash_address - ((uint32_t)flash_mem)) / AT91C_IFLASH_PAGE_SIZE;
                     /* Translate address to flash page and do flash, update here for the 512k part */
@@ -142,7 +168,7 @@ void UsbPacketReceived(uint8_t *packet, int len) {
                 while (!((sr = AT91C_BASE_EFC0->EFC_FSR) & AT91C_MC_FRDY));
                 if (sr & (AT91C_MC_LOCKE | AT91C_MC_PROGE)) {
                     dont_ack = 1;
-                    cmd_send(CMD_NACK, sr, 0, 0, 0, 0);
+                    reply_old(CMD_NACK, sr, 0, 0, 0, 0);
                 }
             }
         }
@@ -178,7 +204,7 @@ void UsbPacketReceived(uint8_t *packet, int len) {
             } else {
                 start_addr = end_addr = 0;
                 dont_ack = 1;
-                cmd_send(CMD_NACK, 0, 0, 0, 0, 0);
+                reply_old(CMD_NACK, 0, 0, 0, 0, 0);
             }
         }
         break;
@@ -190,14 +216,17 @@ void UsbPacketReceived(uint8_t *packet, int len) {
     }
 
     if (!dont_ack)
-        cmd_send(CMD_ACK, arg0, 0, 0, 0, 0);
+        reply_old(CMD_ACK, arg0, 0, 0, 0, 0);
 }
 
-static void flash_mode(int externally_entered) {
+static void flash_mode(void) {
     start_addr = 0;
     end_addr = 0;
     bootrom_unlocked = 0;
-    uint8_t rx[sizeof(UsbCommand)];
+    uint8_t rx[sizeof(PacketCommandOLD)];
+    common_area.command = COMMON_AREA_COMMAND_NONE;
+    if (!common_area.flags.button_pressed && BUTTON_PRESS())
+        common_area.flags.button_pressed = 1;
 
     usb_enable();
 
@@ -209,20 +238,21 @@ static void flash_mode(int externally_entered) {
 
         // Check if there is a usb packet available
         if (usb_poll_validate_length()) {
-            if (usb_read(rx, sizeof(rx)))
+            if (usb_read(rx, sizeof(rx))) {
                 UsbPacketReceived(rx, sizeof(rx));
+            }
         }
 
-        if (!externally_entered && !BUTTON_PRESS()) {
+        if (common_area.flags.button_pressed && !BUTTON_PRESS()) {
+            common_area.flags.button_pressed = 0;
+        }
+        if (!common_area.flags.button_pressed && BUTTON_PRESS()) {
             /* Perform a reset to leave flash mode */
+            common_area.flags.button_pressed = 1;
             usb_disable();
             LED_B_ON();
             AT91C_BASE_RSTC->RSTC_RCR = RST_CONTROL_KEY | AT91C_RSTC_PROCRST;
             for (;;) {};
-        }
-        if (externally_entered && BUTTON_PRESS()) {
-            /* Let the user's button press override the automatic leave */
-            externally_entered = 0;
         }
     }
 }
@@ -311,18 +341,16 @@ void BootROM(void) {
 
         common_area.magic = COMMON_AREA_MAGIC;
         common_area.version = 1;
-        common_area.flags.bootrom_present = 1;
     }
-
     common_area.flags.bootrom_present = 1;
-    if (common_area.command == COMMON_AREA_COMMAND_ENTER_FLASH_MODE) {
-        common_area.command = COMMON_AREA_COMMAND_NONE;
-        flash_mode(1);
-    } else if (BUTTON_PRESS()) {
-        flash_mode(0);
-    } else if (_osimage_entry == 0xffffffffU) {
-        flash_mode(1);
+
+    if ((common_area.command == COMMON_AREA_COMMAND_ENTER_FLASH_MODE) ||
+            (!common_area.flags.button_pressed && BUTTON_PRESS()) ||
+            (_osimage_entry == 0xffffffffU)) {
+        flash_mode();
     } else {
+        // clear button status, even if button still pressed
+        common_area.flags.button_pressed = 0;
         // jump to Flash address of the osimage entry point (LSBit set for thumb mode)
         __asm("bx %0\n" : : "r"(((int)&_osimage_entry) | 0x1));
     }

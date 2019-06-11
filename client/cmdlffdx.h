@@ -19,17 +19,10 @@
 #include "protocols.h"  // for T55xx config register definitions
 #include "lfdemod.h"    // parityTest
 
-extern int CmdLFFdx(const char *Cmd);
-extern int CmdFdxClone(const char *Cmd);
-extern int CmdFdxSim(const char *Cmd);
-extern int CmdFdxRead(const char *Cmd);
-extern int CmdFdxDemod(const char *Cmd);
-
+int CmdLFFdx(const char *Cmd);
+int detectFDXB(uint8_t *dest, size_t *size);
+int demodFDX(void);
 int getFDXBits(uint64_t national_id, uint16_t country, uint8_t isanimal, uint8_t isextended, uint32_t extended, uint8_t *bits);
 
-extern int usage_lf_fdx_clone(void);
-extern int usage_lf_fdx_sim(void);
-extern int usage_lf_fdx_read(void);
-extern int usage_lf_fdx_demod(void);
 #endif
 

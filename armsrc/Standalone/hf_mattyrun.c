@@ -37,6 +37,7 @@ on a blank card.
 
 uint8_t uid[10];
 uint32_t cuid;
+iso14a_card_select_t p_card;
 
 //-----------------------------------------------------------------------------
 // Matt's StandAlone mod.
@@ -74,13 +75,13 @@ static int saMifareCSetBlock(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_
     while (true) {
         // get UID from chip
         if (workFlags & 0x01) {
-            if (!iso14443a_select_card(uid, NULL, &cuid, true, 0, true)) {
-                DbprintfEx(FLAG_NOLOG, "Can't select card");
+            if (!iso14443a_select_card(uid, &p_card, &cuid, true, 0, true)) {
+                DbprintfEx(FLAG_NEWLINE, "Can't select card");
                 break;
             };
 
             if (mifare_classic_halt(NULL, cuid)) {
-                DbprintfEx(FLAG_NOLOG, "Halt error");
+                DbprintfEx(FLAG_NEWLINE, "Halt error");
                 break;
             };
         };
@@ -89,18 +90,18 @@ static int saMifareCSetBlock(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_
         if (needWipe) {
             ReaderTransmitBitsPar(wupC1, 7, 0, NULL);
             if (!ReaderReceive(receivedAnswer, receivedAnswerPar) || (receivedAnswer[0] != 0x0a)) {
-                DbprintfEx(FLAG_NOLOG, "wupC1 error");
+                DbprintfEx(FLAG_NEWLINE, "wupC1 error");
                 break;
             };
 
             ReaderTransmit(wipeC, sizeof(wipeC), NULL);
             if (!ReaderReceive(receivedAnswer, receivedAnswerPar) || (receivedAnswer[0] != 0x0a)) {
-                DbprintfEx(FLAG_NOLOG, "wipeC error");
+                DbprintfEx(FLAG_NEWLINE, "wipeC error");
                 break;
             };
 
             if (mifare_classic_halt(NULL, cuid)) {
-                DbprintfEx(FLAG_NOLOG, "Halt error");
+                DbprintfEx(FLAG_NEWLINE, "Halt error");
                 break;
             };
         };
@@ -110,19 +111,19 @@ static int saMifareCSetBlock(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_
         if (workFlags & 0x02) {
             ReaderTransmitBitsPar(wupC1, 7, 0, NULL);
             if (!ReaderReceive(receivedAnswer, receivedAnswerPar) || (receivedAnswer[0] != 0x0a)) {
-                DbprintfEx(FLAG_NOLOG, "wupC1 error");
+                DbprintfEx(FLAG_NEWLINE, "wupC1 error");
                 break;
             };
 
             ReaderTransmit(wupC2, sizeof(wupC2), NULL);
             if (!ReaderReceive(receivedAnswer, receivedAnswerPar) || (receivedAnswer[0] != 0x0a)) {
-                DbprintfEx(FLAG_NOLOG, "wupC2 errorv");
+                DbprintfEx(FLAG_NEWLINE, "wupC2 errorv");
                 break;
             };
         }
 
         if ((mifare_sendcmd_short(NULL, 0, 0xA0, blockNo, receivedAnswer, receivedAnswerPar, NULL) != 1) || (receivedAnswer[0] != 0x0a)) {
-            DbprintfEx(FLAG_NOLOG, "write block send command error");
+            DbprintfEx(FLAG_NEWLINE, "write block send command error");
             break;
         };
 
@@ -130,13 +131,13 @@ static int saMifareCSetBlock(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_
         AddCrc14A(d_block, 16);
         ReaderTransmit(d_block, sizeof(d_block), NULL);
         if ((ReaderReceive(receivedAnswer, receivedAnswerPar) != 1) || (receivedAnswer[0] != 0x0a)) {
-            DbprintfEx(FLAG_NOLOG, "write block send data error");
+            DbprintfEx(FLAG_NEWLINE, "write block send data error");
             break;
         };
 
         if (workFlags & 0x04) {
             if (mifare_classic_halt(NULL, cuid)) {
-                DbprintfEx(FLAG_NOLOG, "Halt error");
+                DbprintfEx(FLAG_NEWLINE, "Halt error");
                 break;
             };
         }
@@ -155,7 +156,7 @@ static int saMifareCSetBlock(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_
 /* the chk function is a piwi’ed(tm) check that will try all keys for
 a particular sector. also no tracing no dbg */
 static int saMifareChkKeys(uint8_t blockNo, uint8_t keyType, bool clearTrace, uint8_t keyCount, uint8_t *datain, uint64_t *key) {
-    MF_DBGLEVEL = MF_DBG_NONE;
+    DBGLEVEL = DBG_NONE;
     iso14443a_setup(FPGA_HF_ISO14443A_READER_LISTEN);
     set_tracing(false);
 
@@ -167,8 +168,8 @@ static int saMifareChkKeys(uint8_t blockNo, uint8_t keyType, bool clearTrace, ui
 
         /* no need for anticollision. just verify tag is still here */
         // if (!iso14443a_fast_select_card(cjuid, 0)) {
-        if (!iso14443a_select_card(uid, NULL, &cuid, true, 0, true)) {
-            DbprintfEx(FLAG_NOLOG, "FATAL : E_MF_LOSTTAG");
+        if (!iso14443a_select_card(uid, &p_card, &cuid, true, 0, true)) {
+            DbprintfEx(FLAG_NEWLINE, "FATAL : E_MF_LOSTTAG");
             return -1;
         }
 
@@ -189,6 +190,10 @@ static int saMifareChkKeys(uint8_t blockNo, uint8_t keyType, bool clearTrace, ui
     FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
 
     return -1;
+}
+
+void ModInfo(void) {
+    DbpString("   HF Mifare sniff/clone - aka MattyRun (Matías A. Ré Medina)");
 }
 
 void RunMod() {
@@ -218,7 +223,6 @@ void RunMod() {
     */
     bool printKeys = false;         // Prints keys
     bool transferToEml = true;      // Transfer keys to emulator memory
-    bool ecfill = true;             // Fill emulator memory with cards content.
     bool simulation = true;         // Simulates an exact copy of the target tag
     bool fillFromEmulator = false;  // Dump emulator memory.
 
@@ -231,7 +235,6 @@ void RunMod() {
     uint64_t key64;                 // Defines current key
     uint8_t *keyBlock;              // Where the keys will be held in memory.
     uint8_t stKeyBlock = 20;        // Set the quantity of keys in the block.
-    uint8_t filled = 0;             // Used to check if the memory was filled with success.
     bool keyFound = false;
 
     /*
@@ -295,17 +298,15 @@ void RunMod() {
     /*
         Iterates through each sector checking if there is a correct key.
     */
-    int key = -1;
-    int block = 0;
     bool err = 0;
     bool allKeysFound = true;
     uint32_t size = mfKeysCnt;
 
     for (int type = !keyType; type < 2 && !err; keyType == 2 ? (type++) : (type = 2)) {
-        block = blockNo;
+        int block = blockNo;
         for (int sec = 0; sec < sectorsCnt && !err; ++sec) {
             Dbprintf("\tCurrent sector:%3d, block:%3d, key type: %c, key count: %i ", sec, block, type ? 'B' : 'A', mfKeysCnt);
-            key = saMifareChkKeys(block, type, true, size, &keyBlock[0], &key64);
+            int key = saMifareChkKeys(block, type, true, size, &keyBlock[0], &key64);
             if (key == -1) {
                 LED(LED_RED, 50); //red
                 Dbprintf("\t✕ Key not found for this sector!");
@@ -330,7 +331,7 @@ void RunMod() {
 
     /*
         TODO:
-        - Get UID from tag and set accordingly in emulator memory and call mifare1ksim with right flags (iceman)
+        - Get UID from tag and set accordingly in emulator memory and call mifaresim with right flags (iceman)
     */
     if (!allKeysFound && keyFound) {
         Dbprintf("\t✕ There's currently no nested attack in MattyRun, sorry!");
@@ -365,40 +366,52 @@ void RunMod() {
         }
         Dbprintf("\t✓ Found keys have been transferred to the emulator memory.");
         if (ecfill) {
-
+            int filled;
             Dbprintf("\tFilling in with key A.");
-            MifareECardLoad(sectorsCnt, 0, 0, &filled);
-            if (filled != 1) {
+            filled = MifareECardLoad(sectorsCnt, 0);
+            if (filled != PM3_SUCCESS) {
                 Dbprintf("\t✕ Failed filling with A.");
             }
 
             Dbprintf("\tFilling in with key B.");
-            MifareECardLoad(sectorsCnt, 1, 0, &filled);
-            if (filled != 1) {
+            filled = MifareECardLoad(sectorsCnt, 1);
+            if (filled != PM3_SUCCESS) {
                 Dbprintf("\t✕ Failed filling with B.");
             }
 
-            if ((filled == 1) && simulation) {
-                Dbprintf("\t✓ Filled, simulation started.");
+            if ((filled == PM3_SUCCESS) && simulation) {
+                Dbprintf("\t✓ Emulator memory filled, simulation started.");
 
                 // This will tell the fpga to emulate using previous keys and current target tag content.
                 Dbprintf("\t Press button to abort simulation at anytime.");
 
                 LED_B_ON(); // green
                 // assuming arg0==0,  use hardcoded uid 0xdeadbeaf
-                Mifare1ksim(FLAG_4B_UID_IN_DATA | FLAG_UID_IN_EMUL, 0, 0, uid);
+                uint16_t flags;
+                switch (p_card.uidlen) {
+                    case 10:
+                        flags = FLAG_10B_UID_IN_DATA;
+                        break;
+                    case 7:
+                        flags = FLAG_7B_UID_IN_DATA;
+                        break;
+                    default:
+                        flags = FLAG_4B_UID_IN_DATA;
+                        break;
+                }
+                Mifare1ksim(flags | FLAG_MF_1K, 0, uid);
                 LED_B_OFF();
 
                 /*
                     Needs further testing.
                 */
                 if (fillFromEmulator) {
-                    uint8_t retry = 5, cnt;
+                    uint8_t retry = 5;
                     Dbprintf("\t Trying to dump into blank card.");
                     int flags = 0;
                     LED_A_ON(); //yellow
                     for (int blockNum = 0; blockNum < 16 * 4; blockNum += 1) {
-                        cnt = 0;
+                        uint8_t cnt = 0;
                         emlGetMem(mblock, blockNum, 1);
                         // switch on field and send magic sequence
                         if (blockNum == 0) flags = 0x08 + 0x02;
@@ -426,8 +439,8 @@ void RunMod() {
                     }
 
                 }
-            } else if (filled != 1) {
-                Dbprintf("\t✕ Memory could not be filled due to errors.");
+            } else if (filled != PM3_SUCCESS) {
+                Dbprintf("\t✕ Emulator memory could not be filled due to errors.");
                 LED_C_ON();
             }
         }

@@ -259,7 +259,7 @@ const APDUCode APDUCodeTable[] = {
 };
 const size_t APDUCodeTableLen = sizeof(APDUCodeTable) / sizeof(APDUCode);
 
-int CodeCmp(const char *code1, const char *code2) {
+static int CodeCmp(const char *code1, const char *code2) {
     int xsymb = 0;
     int cmp = 0;
     for (int i = 0; i < 4; i++) {
@@ -277,16 +277,15 @@ int CodeCmp(const char *code1, const char *code2) {
     return -1;
 }
 
-const APDUCode *const GetAPDUCode(uint8_t sw1, uint8_t sw2) {
+const APDUCode *GetAPDUCode(uint8_t sw1, uint8_t sw2) {
     char buf[6] = {0};
-    int res;
     int mineq = APDUCodeTableLen;
     int mineqindx = 0;
 
     sprintf(buf, "%02X%02X", sw1, sw2);
 
     for (int i = 0; i < APDUCodeTableLen; i++) {
-        res = CodeCmp(APDUCodeTable[i].ID, buf);
+        int res = CodeCmp(APDUCodeTable[i].ID, buf);
 
         // equal
         if (res == 0) {

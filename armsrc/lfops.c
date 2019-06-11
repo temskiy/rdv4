@@ -55,7 +55,7 @@ Default LF T55xx config is set to:
 t55xx_config t_config = { 29 * 8, 17 * 8, 15 * 8, 47 * 8, 15 * 8 } ;
 
 void printT55xxConfig(void) {
-    Dbprintf("LF T55XX config");
+    DbpString(_BLUE_("LF T55XX config"));
     Dbprintf("  [a] startgap............%d*8 (%d)", t_config.start_gap / 8, t_config.start_gap);
     Dbprintf("  [b] writegap............%d*8 (%d)", t_config.write_gap / 8, t_config.write_gap);
     Dbprintf("  [c] write_0.............%d*8 (%d)", t_config.write_0 / 8,   t_config.write_0);
@@ -99,7 +99,7 @@ void setT55xxConfig(uint8_t arg0, t55xx_config *c) {
     Flash_Erase4k(3, 0xD);
     res = Flash_Write(T55XX_CONFIG_OFFSET, buf, T55XX_CONFIG_LEN);
 
-    if (res == T55XX_CONFIG_LEN && MF_DBGLEVEL > 1) {
+    if (res == T55XX_CONFIG_LEN && DBGLEVEL > 1) {
         DbpString("T55XX Config save success");
     }
 
@@ -137,7 +137,7 @@ void loadT55xxConfig(void) {
     memcpy((uint8_t *)&t_config, buf, T55XX_CONFIG_LEN);
 
     if (isok == T55XX_CONFIG_LEN) {
-        if (MF_DBGLEVEL > 1) DbpString("T55XX Config load success");
+        if (DBGLEVEL > 1) DbpString("T55XX Config load success");
     }
 #endif
 }
@@ -165,7 +165,7 @@ void ModThenAcquireRawAdcSamples125k(uint32_t delay_off, uint32_t period_0, uint
     // clear read buffer
     BigBuf_Clear_keep_EM();
 
-    LFSetupFPGAForADC(sc->divisor, 1);
+    LFSetupFPGAForADC(sc->divisor, true);
 
     // little more time for the tag to fully power up
     WaitMS(200);
@@ -242,7 +242,7 @@ void ModThenAcquireRawAdcSamples125k(uint32_t delay_off, uint32_t period_0, uint
     // Turn off antenna
     FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
     // tell client we are done
-    cmd_send(CMD_ACK, 0, 0, 0, 0, 0);
+    reply_ng(CMD_MOD_THEN_ACQUIRE_RAW_ADC_SAMPLES_125K, PM3_SUCCESS, NULL, 0);
 }
 
 /* blank r/w tag data stream
@@ -561,7 +561,7 @@ void WriteTItag(uint32_t idhi, uint32_t idlo, uint16_t crc) {
 
 // note:   a call to FpgaDownloadAndGo(FPGA_BITSTREAM_LF) must be done before, but
 //  this may destroy the bigbuf so be sure this is called before calling SimulateTagLowFrequencyEx
-void SimulateTagLowFrequencyEx(int period, int gap, int ledcontrol, int numcycles) {
+void SimulateTagLowFrequencyEx(int period, int gap, bool ledcontrol, int numcycles) {
 
     // start us timer
     StartTicks();
@@ -587,7 +587,7 @@ void SimulateTagLowFrequencyEx(int period, int gap, int ledcontrol, int numcycle
     AT91C_BASE_PIOA->PIO_OER = GPIO_SSC_DOUT;
     AT91C_BASE_PIOA->PIO_ODR = GPIO_SSC_CLK;
 
-    uint8_t check = 1;
+    uint16_t check = 0;
 
     for (;;) {
 
@@ -595,7 +595,7 @@ void SimulateTagLowFrequencyEx(int period, int gap, int ledcontrol, int numcycle
             if (x != numcycles) {
                 ++x;
             } else {
-                // exit without turning of field
+                // exit without turning off field
                 return;
             }
         }
@@ -606,24 +606,30 @@ void SimulateTagLowFrequencyEx(int period, int gap, int ledcontrol, int numcycle
         // used as a simple detection of a reader field?
         while (!(AT91C_BASE_PIOA->PIO_PDSR & GPIO_SSC_CLK)) {
             WDT_HIT();
-            if (!check) {
-                if (usb_poll_validate_length() || BUTTON_PRESS())
+            if (check == 1000) {
+                if (data_available() || BUTTON_PRESS())
                     goto OUT;
+                check = 0;
             }
             ++check;
         }
+
+        if (ledcontrol) LED_D_OFF();
 
         if (buf[i])
             OPEN_COIL();
         else
             SHORT_COIL();
 
+        check = 0;
+
         //wait until SSC_CLK goes LOW
         while (AT91C_BASE_PIOA->PIO_PDSR & GPIO_SSC_CLK) {
             WDT_HIT();
-            if (!check) {
-                if (usb_poll_validate_length() || BUTTON_PRESS())
+            if (check == 1000) {
+                if (data_available() || BUTTON_PRESS())
                     goto OUT;
+                check = 0;
             }
             ++check;
         }
@@ -636,8 +642,6 @@ void SimulateTagLowFrequencyEx(int period, int gap, int ledcontrol, int numcycle
                 WaitUS(gap);
             }
         }
-
-        if (ledcontrol) LED_D_OFF();
     }
 OUT:
     StopTicks();
@@ -645,13 +649,13 @@ OUT:
     LED_D_OFF();
 }
 
-void SimulateTagLowFrequency(int period, int gap, int ledcontrol) {
+void SimulateTagLowFrequency(int period, int gap, bool ledcontrol) {
     SimulateTagLowFrequencyEx(period, gap, ledcontrol, -1);
 }
 
 
 #define DEBUG_FRAME_CONTENTS 1
-void SimulateTagLowFrequencyBidir(int divisor, int t0) {
+void SimulateTagLowFrequencyBidir(int divisor, int max_bitlen) {
 }
 // compose fc/5 fc/8  waveform (FSK1)
 
@@ -753,7 +757,7 @@ static void fcAll(uint8_t fc, int *n, uint8_t clock, uint16_t *modCnt) {
 
 // prepare a waveform pattern in the buffer based on the ID given then
 // simulate a HID tag until the button is pressed
-void CmdHIDsimTAGEx(uint32_t hi, uint32_t lo, int ledcontrol, int numcycles) {
+void CmdHIDsimTAGEx(uint32_t hi, uint32_t lo, bool ledcontrol, int numcycles) {
 
     if (hi > 0xFFF) {
         DbpString("[!] tags can only have 44 bits. - USE lf simfsk for larger tags");
@@ -816,15 +820,16 @@ void CmdHIDsimTAGEx(uint32_t hi, uint32_t lo, int ledcontrol, int numcycles) {
     if (ledcontrol) LED_A_OFF();
 }
 
-void CmdHIDsimTAG(uint32_t hi, uint32_t lo, int ledcontrol) {
+void CmdHIDsimTAG(uint32_t hi, uint32_t lo, bool ledcontrol) {
     CmdHIDsimTAGEx(hi, lo, ledcontrol, -1);
-    DbpString("[!] simulation finished");
+    reply_ng(CMD_HID_SIM_TAG, PM3_EOPABORTED, NULL, 0);
 }
 
 // prepare a waveform pattern in the buffer based on the ID given then
 // simulate a FSK tag until the button is pressed
 // arg1 contains fcHigh and fcLow, arg2 contains STT marker and clock
-void CmdFSKsimTAG(uint16_t arg1, uint16_t arg2, size_t size, uint8_t *bits, int ledcontrol) {
+void CmdFSKsimTAG(uint8_t fchigh, uint8_t fclow, uint8_t separator, uint8_t clk, uint16_t bitslen, uint8_t *bits, bool ledcontrol) {
+
     FpgaDownloadAndGo(FPGA_BITSTREAM_LF);
 
     // free eventually allocated BigBuf memory
@@ -834,31 +839,28 @@ void CmdFSKsimTAG(uint16_t arg1, uint16_t arg2, size_t size, uint8_t *bits, int 
     set_tracing(false);
 
     int n = 0, i = 0;
-    uint8_t fcHigh = arg1 >> 8;
-    uint8_t fcLow = arg1 & 0xFF;
     uint16_t modCnt = 0;
-    uint8_t clk = arg2 & 0xFF;
-    uint8_t stt = (arg2 >> 8) & 1;
 
-    if (stt) {
-        //int fsktype = ( fcHigh == 8 && fcLow == 5) ? 1 : 2;
+    if (separator) {
+        //int fsktype = ( fchigh == 8 && fclow == 5) ? 1 : 2;
         //fcSTT(&n);
     }
 
-    for (i = 0; i < size; i++) {
+    for (i = 0; i < bitslen; i++) {
         if (bits[i])
-            fcAll(fcLow, &n, clk, &modCnt);
+            fcAll(fclow, &n, clk, &modCnt);
         else
-            fcAll(fcHigh, &n, clk, &modCnt);
+            fcAll(fchigh, &n, clk, &modCnt);
     }
 
     WDT_HIT();
 
-    Dbprintf("Simulating with fcHigh: %d, fcLow: %d, clk: %d, STT: %d, n: %d", fcHigh, fcLow, clk, stt, n);
+    Dbprintf("Simulating with fcHigh: %d, fcLow: %d, clk: %d, STT: %d, n: %d", fchigh, fclow, clk, separator, n);
 
     if (ledcontrol) LED_A_ON();
     SimulateTagLowFrequency(n, 0, ledcontrol);
     if (ledcontrol) LED_A_OFF();
+    reply_ng(CMD_FSK_SIM_TAG, PM3_EOPABORTED, NULL, 0);
 }
 
 // compose ask waveform for one bit(ASK)
@@ -899,35 +901,39 @@ static void stAskSimBit(int *n, uint8_t clock) {
     memset(dest + (*n) + clock * 3, 1, clock);
     *n += clock * 4;
 }
+static void leadingZeroAskSimBits(int *n, uint8_t clock) {
+    uint8_t *dest = BigBuf_get_addr();
+    memset(dest + (*n), 0, clock * 8);
+    *n += clock * 8;
+}
+
 
 // args clock, ask/man or askraw, invert, transmission separator
-void CmdASKsimTag(uint16_t arg1, uint16_t arg2, size_t size, uint8_t *BitStream, int ledcontrol) {
+void CmdASKsimTAG(uint8_t encoding, uint8_t invert, uint8_t separator, uint8_t clk, uint16_t size, uint8_t *bits, bool ledcontrol) {
     FpgaDownloadAndGo(FPGA_BITSTREAM_LF);
     set_tracing(false);
 
     int n = 0, i = 0;
-    uint8_t clk = (arg1 >> 8) & 0xFF;
-    uint8_t encoding = arg1 & 0xFF;
-    uint8_t separator = arg2 & 1;
-    uint8_t invert = (arg2 >> 8) & 1;
+
+    leadingZeroAskSimBits(&n, clk);
 
     if (encoding == 2) { //biphase
         uint8_t phase = 0;
         for (i = 0; i < size; i++) {
-            biphaseSimBit(BitStream[i]^invert, &n, clk, &phase);
+            biphaseSimBit(bits[i] ^ invert, &n, clk, &phase);
         }
         if (phase == 1) { //run a second set inverted to keep phase in check
             for (i = 0; i < size; i++) {
-                biphaseSimBit(BitStream[i]^invert, &n, clk, &phase);
+                biphaseSimBit(bits[i] ^ invert, &n, clk, &phase);
             }
         }
     } else {  // ask/manchester || ask/raw
         for (i = 0; i < size; i++) {
-            askSimBit(BitStream[i]^invert, &n, clk, encoding);
+            askSimBit(bits[i] ^ invert, &n, clk, encoding);
         }
-        if (encoding == 0 && BitStream[0] == BitStream[size - 1]) { //run a second set inverted (for ask/raw || biphase phase)
+        if (encoding == 0 && bits[0] == bits[size - 1]) { //run a second set inverted (for ask/raw || biphase phase)
             for (i = 0; i < size; i++) {
-                askSimBit(BitStream[i]^invert ^ 1, &n, clk, encoding);
+                askSimBit(bits[i] ^ invert ^ 1, &n, clk, encoding);
             }
         }
     }
@@ -943,6 +949,7 @@ void CmdASKsimTag(uint16_t arg1, uint16_t arg2, size_t size, uint8_t *BitStream,
     if (ledcontrol) LED_A_ON();
     SimulateTagLowFrequency(n, 0, ledcontrol);
     if (ledcontrol) LED_A_OFF();
+    reply_ng(CMD_ASK_SIM_TAG, PM3_EOPABORTED, NULL, 0);
 }
 
 //carrier can be 2,4 or 8
@@ -968,17 +975,14 @@ static void pskSimBit(uint8_t waveLen, int *n, uint8_t clk, uint8_t *curPhase, b
 }
 
 // args clock, carrier, invert,
-void CmdPSKsimTag(uint16_t arg1, uint16_t arg2, size_t size, uint8_t *BitStream, int ledcontrol) {
+void CmdPSKsimTag(uint8_t carrier, uint8_t invert, uint8_t clk, uint16_t size, uint8_t *bits, bool ledcontrol) {
     FpgaDownloadAndGo(FPGA_BITSTREAM_LF);
     set_tracing(false);
 
     int n = 0, i = 0;
-    uint8_t clk = arg1 >> 8;
-    uint8_t carrier = arg1 & 0xFF;
-    uint8_t invert = arg2 & 0xFF;
     uint8_t curPhase = 0;
     for (i = 0; i < size; i++) {
-        if (BitStream[i] == curPhase) {
+        if (bits[i] == curPhase) {
             pskSimBit(carrier, &n, clk, &curPhase, false);
         } else {
             pskSimBit(carrier, &n, clk, &curPhase, true);
@@ -992,14 +996,14 @@ void CmdPSKsimTag(uint16_t arg1, uint16_t arg2, size_t size, uint8_t *BitStream,
     if (ledcontrol) LED_A_ON();
     SimulateTagLowFrequency(n, 0, ledcontrol);
     if (ledcontrol) LED_A_OFF();
+    reply_ng(CMD_PSK_SIM_TAG, PM3_EOPABORTED, NULL, 0);
 }
 
 // loop to get raw HID waveform then FSK demodulate the TAG ID from it
 void CmdHIDdemodFSK(int findone, uint32_t *high, uint32_t *low, int ledcontrol) {
     uint8_t *dest = BigBuf_get_addr();
-    size_t size = 0;
+    size_t size;
     uint32_t hi2 = 0, hi = 0, lo = 0;
-    int idx = 0;
     int dummyIdx = 0;
     // Configure to go in 125Khz listen mode
     LFSetupFPGAForADC(95, true);
@@ -1007,7 +1011,7 @@ void CmdHIDdemodFSK(int findone, uint32_t *high, uint32_t *low, int ledcontrol) 
     //clear read buffer
     BigBuf_Clear_keep_EM();
 
-    while (!BUTTON_PRESS() && !usb_poll_validate_length()) {
+    while (!BUTTON_PRESS() && !data_available()) {
 
         WDT_HIT();
         if (ledcontrol) LED_A_ON();
@@ -1015,7 +1019,7 @@ void CmdHIDdemodFSK(int findone, uint32_t *high, uint32_t *low, int ledcontrol) 
         DoAcquisition_default(-1, true);
         // FSK demodulator
         size = 50 * 128 * 2; //big enough to catch 2 sequences of largest format
-        idx = HIDdemodFSK(dest, &size, &hi2, &hi, &lo, &dummyIdx);
+        int idx = HIDdemodFSK(dest, &size, &hi2, &hi, &lo, &dummyIdx);
         if (idx < 0) continue;
 
         if (idx > 0 && lo > 0 && (size == 96 || size == 192)) {
@@ -1029,7 +1033,7 @@ void CmdHIDdemodFSK(int findone, uint32_t *high, uint32_t *low, int ledcontrol) 
                         );
             } else {  //standard HID tags 44/96 bits
                 uint8_t bitlen = 0;
-                uint32_t fc = 0;
+                uint32_t fac = 0;
                 uint32_t cardnum = 0;
 
                 if (((hi >> 5) & 1) == 1) { //if bit 38 is set then < 37 bit format is used
@@ -1041,35 +1045,35 @@ void CmdHIDdemodFSK(int findone, uint32_t *high, uint32_t *low, int ledcontrol) 
                         idx3++;
                     }
                     bitlen = idx3 + 19;
-                    fc = 0;
+                    fac = 0;
                     cardnum = 0;
                     if (bitlen == 26) {
                         cardnum = (lo >> 1) & 0xFFFF;
-                        fc = (lo >> 17) & 0xFF;
+                        fac = (lo >> 17) & 0xFF;
                     }
                     if (bitlen == 37) {
                         cardnum = (lo >> 1) & 0x7FFFF;
-                        fc = ((hi & 0xF) << 12) | (lo >> 20);
+                        fac = ((hi & 0xF) << 12) | (lo >> 20);
                     }
                     if (bitlen == 34) {
                         cardnum = (lo >> 1) & 0xFFFF;
-                        fc = ((hi & 1) << 15) | (lo >> 17);
+                        fac = ((hi & 1) << 15) | (lo >> 17);
                     }
                     if (bitlen == 35) {
                         cardnum = (lo >> 1) & 0xFFFFF;
-                        fc = ((hi & 1) << 11) | (lo >> 21);
+                        fac = ((hi & 1) << 11) | (lo >> 21);
                     }
                 } else { //if bit 38 is not set then 37 bit format is used
                     bitlen = 37;
                     cardnum = (lo >> 1) & 0x7FFFF;
-                    fc = ((hi & 0xF) << 12) | (lo >> 20);
+                    fac = ((hi & 0xF) << 12) | (lo >> 20);
                 }
                 Dbprintf("TAG ID: %x%08x (%d) - Format Len: %dbit - FC: %d - Card: %d",
                          hi,
                          lo,
                          (lo >> 1) & 0xFFFF,
                          bitlen,
-                         fc,
+                         fac,
                          cardnum
                         );
             }
@@ -1095,13 +1099,13 @@ void CmdAWIDdemodFSK(int findone, uint32_t *high, uint32_t *low, int ledcontrol)
     //big enough to catch 2 sequences of largest format
     size_t size = 12800; //50 * 128 * 2;
 
-    int idx = 0, dummyIdx = 0;
+    int dummyIdx = 0;
 
     BigBuf_Clear_keep_EM();
 
     LFSetupFPGAForADC(95, true);
 
-    while (!BUTTON_PRESS() && !usb_poll_validate_length()) {
+    while (!BUTTON_PRESS() && !data_available()) {
 
         WDT_HIT();
         if (ledcontrol) LED_A_ON();
@@ -1109,7 +1113,7 @@ void CmdAWIDdemodFSK(int findone, uint32_t *high, uint32_t *low, int ledcontrol)
         DoAcquisition_default(-1, true);
         // FSK demodulator
 
-        idx = detectAWID(dest, &size, &dummyIdx);
+        int idx = detectAWID(dest, &size, &dummyIdx);
 
         if (idx <= 0 || size != 96) continue;
         // Index map
@@ -1147,24 +1151,20 @@ void CmdAWIDdemodFSK(int findone, uint32_t *high, uint32_t *low, int ledcontrol)
         // w = wiegand parity
         // (26 bit format shown)
 
-        uint32_t fc = 0;
-        uint32_t cardnum = 0;
-        uint32_t code1 = 0;
-        uint32_t code2 = 0;
         uint8_t fmtLen = bytebits_to_byte(dest, 8);
         if (fmtLen == 26) {
-            fc = bytebits_to_byte(dest + 9, 8);
-            cardnum = bytebits_to_byte(dest + 17, 16);
-            code1 = bytebits_to_byte(dest + 8, fmtLen);
-            Dbprintf("AWID Found - BitLength: %d, FC: %d, Card: %d - Wiegand: %x, Raw: %08x%08x%08x", fmtLen, fc, cardnum, code1, rawHi2, rawHi, rawLo);
+            uint32_t fac = bytebits_to_byte(dest + 9, 8);
+            uint32_t cardnum = bytebits_to_byte(dest + 17, 16);
+            uint32_t code1 = bytebits_to_byte(dest + 8, fmtLen);
+            Dbprintf("AWID Found - BitLength: %d, FC: %d, Card: %d - Wiegand: %x, Raw: %08x%08x%08x", fmtLen, fac, cardnum, code1, rawHi2, rawHi, rawLo);
         } else {
-            cardnum = bytebits_to_byte(dest + 8 + (fmtLen - 17), 16);
+            uint32_t cardnum = bytebits_to_byte(dest + 8 + (fmtLen - 17), 16);
             if (fmtLen > 32) {
-                code1 = bytebits_to_byte(dest + 8, fmtLen - 32);
-                code2 = bytebits_to_byte(dest + 8 + (fmtLen - 32), 32);
+                uint32_t code1 = bytebits_to_byte(dest + 8, fmtLen - 32);
+                uint32_t code2 = bytebits_to_byte(dest + 8 + (fmtLen - 32), 32);
                 Dbprintf("AWID Found - BitLength: %d -unknown BitLength- (%d) - Wiegand: %x%08x, Raw: %08x%08x%08x", fmtLen, cardnum, code1, code2, rawHi2, rawHi, rawLo);
             } else {
-                code1 = bytebits_to_byte(dest + 8, fmtLen);
+                uint32_t code1 = bytebits_to_byte(dest + 8, fmtLen);
                 Dbprintf("AWID Found - BitLength: %d -unknown BitLength- (%d) - Wiegand: %x, Raw: %08x%08x%08x", fmtLen, cardnum, code1, rawHi2, rawHi, rawLo);
             }
         }
@@ -1174,8 +1174,6 @@ void CmdAWIDdemodFSK(int findone, uint32_t *high, uint32_t *low, int ledcontrol)
             *low = rawLo;
             break;
         }
-        // reset
-        idx = 0;
         WDT_HIT();
     }
     FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
@@ -1186,8 +1184,8 @@ void CmdAWIDdemodFSK(int findone, uint32_t *high, uint32_t *low, int ledcontrol)
 void CmdEM410xdemod(int findone, uint32_t *high, uint64_t *low, int ledcontrol) {
     uint8_t *dest = BigBuf_get_addr();
 
-    size_t size = 0, idx = 0;
-    int clk = 0, invert = 0, errCnt = 0, maxErr = 20;
+    size_t size, idx = 0;
+    int clk = 0, invert = 0, maxErr = 20;
     uint32_t hi = 0;
     uint64_t lo = 0;
 
@@ -1195,7 +1193,7 @@ void CmdEM410xdemod(int findone, uint32_t *high, uint64_t *low, int ledcontrol) 
 
     LFSetupFPGAForADC(95, true);
 
-    while (!BUTTON_PRESS() && !usb_poll_validate_length()) {
+    while (!BUTTON_PRESS() && !data_available()) {
 
         WDT_HIT();
         if (ledcontrol) LED_A_ON();
@@ -1205,10 +1203,10 @@ void CmdEM410xdemod(int findone, uint32_t *high, uint64_t *low, int ledcontrol) 
         size  = BigBuf_max_traceLen();
         //askdemod and manchester decode
         if (size > 16385) size = 16385; //big enough to catch 2 sequences of largest format
-        errCnt = askdemod(dest, &size, &clk, &invert, maxErr, 0, 1);
+        int errCnt = askdemod(dest, &size, &clk, &invert, maxErr, 0, 1);
         WDT_HIT();
 
-        if (errCnt < 0) continue;
+        if (errCnt > 50) continue;
 
         errCnt = Em410xDecode(dest, &size, &idx, &hi, &lo);
         if (errCnt == 1) {
@@ -1238,7 +1236,7 @@ void CmdEM410xdemod(int findone, uint32_t *high, uint64_t *low, int ledcontrol) 
         }
         WDT_HIT();
         hi = lo = size = idx = 0;
-        clk = invert = errCnt = 0;
+        clk = invert = 0;
     }
     FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
     DbpString("Stopped");
@@ -1249,7 +1247,7 @@ void CmdIOdemodFSK(int findone, uint32_t *high, uint32_t *low, int ledcontrol) {
 
     uint8_t *dest = BigBuf_get_addr();
 
-    int dummyIdx = 0, idx = 0;
+    int dummyIdx = 0;
     uint32_t code = 0, code2 = 0;
     uint8_t version = 0, facilitycode = 0, crc = 0;
     uint16_t number = 0, calccrc = 0;
@@ -1261,7 +1259,7 @@ void CmdIOdemodFSK(int findone, uint32_t *high, uint32_t *low, int ledcontrol) {
     // Configure to go in 125Khz listen mode
     LFSetupFPGAForADC(95, true);
 
-    while (!BUTTON_PRESS() && !usb_poll_validate_length()) {
+    while (!BUTTON_PRESS() && !data_available()) {
         WDT_HIT();
         if (ledcontrol) LED_A_ON();
 
@@ -1269,7 +1267,7 @@ void CmdIOdemodFSK(int findone, uint32_t *high, uint32_t *low, int ledcontrol) {
 
         //fskdemod and get start index
         WDT_HIT();
-        idx = detectIOProx(dest, &size, &dummyIdx);
+        int idx = detectIOProx(dest, &size, &dummyIdx);
         if (idx < 0) continue;
         //valid tag found
 
@@ -1325,8 +1323,6 @@ void CmdIOdemodFSK(int findone, uint32_t *high, uint32_t *low, int ledcontrol) {
         code = code2 = 0;
         version = facilitycode = 0;
         number = 0;
-        idx = 0;
-
         WDT_HIT();
     }
     FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
@@ -1393,16 +1389,16 @@ void T55xxResetRead(void) {
 
     // Turn the field off
     FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF); // field off
-    cmd_send(CMD_ACK, 0, 0, 0, 0, 0);
+    reply_old(CMD_ACK, 0, 0, 0, 0, 0);
     LED_A_OFF();
 }
 
 // Write one card block in page 0, no lock
-void T55xxWriteBlockExt(uint32_t Data, uint8_t Block, uint32_t Pwd, uint8_t arg) {
+void T55xxWriteBlockExt(uint32_t data, uint8_t blockno, uint32_t pwd, uint8_t flags) {
     LED_A_ON();
-    bool PwdMode = arg & 0x1;
-    uint8_t Page = (arg & 0x2) >> 1;
-    bool testMode = arg & 0x4;
+    bool pwd_mode = (flags & 0x1);
+    uint8_t page = (flags & 0x2) >> 1;
+    bool test_mode = (flags & 0x4) >> 2;
     uint32_t i = 0;
 
     // Set up FPGA, 125kHz
@@ -1410,30 +1406,38 @@ void T55xxWriteBlockExt(uint32_t Data, uint8_t Block, uint32_t Pwd, uint8_t arg)
 
     // make sure tag is fully powered up...
     WaitMS(4);
+
     // Trigger T55x7 in mode.
     FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
     WaitUS(t_config.start_gap);
 
-    if (testMode) Dbprintf("TestMODE");
-    // Std Opcode 10
-    T55xxWriteBit(testMode ? 0 : 1);
-    T55xxWriteBit(testMode ? 1 : Page); //Page 0
-
-    if (PwdMode) {
-        // Send Pwd
-        for (i = 0x80000000; i != 0; i >>= 1)
-            T55xxWriteBit(Pwd & i);
+    if (test_mode) {
+        Dbprintf("T55xx writing with %s", _YELLOW_("test mode enabled"));
+        // undocmented testmode opcode 01
+        T55xxWriteBit(0);
+        T55xxWriteBit(1);
+    } else {
+        // std opcode 10 == page 0
+        // std opcode 11 == page 1
+        T55xxWriteBit(1);
+        T55xxWriteBit(page);
     }
-    // Send Lock bit
+
+    if (pwd_mode) {
+        // Send pwd
+        for (i = 0x80000000; i != 0; i >>= 1)
+            T55xxWriteBit(pwd & i);
+    }
+    // Send lock bit
     T55xxWriteBit(0);
 
-    // Send Data
+    // Send data
     for (i = 0x80000000; i != 0; i >>= 1)
-        T55xxWriteBit(Data & i);
+        T55xxWriteBit(data & i);
 
-    // Send Block number
+    // Send block number
     for (i = 0x04; i != 0; i >>= 1)
-        T55xxWriteBit(Block & i);
+        T55xxWriteBit(blockno & i);
 
     // Perform write (nominal is 5.6 ms for T55x7 and 18ms for E5550,
     // so wait a little more)
@@ -1442,7 +1446,7 @@ void T55xxWriteBlockExt(uint32_t Data, uint8_t Block, uint32_t Pwd, uint8_t arg)
     //  - programming takes ~5.6ms for t5577 ~18ms for E5550 or t5567
     //  so we should wait 1 clock + 5.6ms then read response?
     //  but we need to know we are dealing with t5577 vs t5567 vs e5550 (or q5) marshmellow...
-    if (testMode) {
+    if (test_mode) {
         //TESTMODE TIMING TESTS:
         // <566us does nothing
         // 566-568 switches between wiping to 0s and doing nothing
@@ -1470,25 +1474,21 @@ void T55xxWriteBlockExt(uint32_t Data, uint8_t Block, uint32_t Pwd, uint8_t arg)
 }
 
 // Write one card block in page 0, no lock
-void T55xxWriteBlock(uint32_t Data, uint8_t Block, uint32_t Pwd, uint8_t arg) {
-    T55xxWriteBlockExt(Data, Block, Pwd, arg);
-    cmd_send(CMD_ACK, 0, 0, 0, 0, 0);
+// uses NG format
+void T55xxWriteBlock(uint8_t *data) {
+    t55xx_write_block_t *c = (t55xx_write_block_t *)data;
+    T55xxWriteBlockExt(c->data, c->blockno, c->pwd, c->flags);
+    reply_ng(CMD_T55XX_WRITE_BLOCK, PM3_SUCCESS, NULL, 0);
 }
 
 // Read one card block in page [page]
-void T55xxReadBlock(uint16_t arg0, uint8_t Block, uint32_t Pwd) {
+void T55xxReadBlock(uint8_t page, bool pwd_mode, bool brute_mem, uint8_t block, uint32_t pwd) {
     LED_A_ON();
-    bool PwdMode = arg0 & 0x1;
-    uint8_t Page = (arg0 & 0x2) >> 1;
-    bool brute_mem =  arg0 & 0x4;
-
-    uint32_t i = 0;
-
-    // regular read mode
-    bool RegReadMode = (Block == 0xFF);
-
+    bool regular_readmode = (block == 0xFF);
     uint8_t start_wait = 4;
     size_t samples = 12000;
+    uint32_t i;
+
     if (brute_mem) {
         start_wait = 0;
         samples = 1024;
@@ -1498,7 +1498,7 @@ void T55xxReadBlock(uint16_t arg0, uint8_t Block, uint32_t Pwd) {
     BigBuf_Clear_keep_EM();
 
     //make sure block is at max 7
-    Block &= 0x7;
+    block &= 0x7;
 
     // Set up FPGA, 125kHz to power up the tag
     LFSetupFPGAForADC(95, true);
@@ -1511,25 +1511,25 @@ void T55xxReadBlock(uint16_t arg0, uint8_t Block, uint32_t Pwd) {
 
     // Opcode 1[page]
     T55xxWriteBit(1);
-    T55xxWriteBit(Page); //Page 0
+    T55xxWriteBit(page); //Page 0
 
-    if (PwdMode) {
+    if (pwd_mode) {
         // Send Pwd
         for (i = 0x80000000; i != 0; i >>= 1)
-            T55xxWriteBit(Pwd & i);
+            T55xxWriteBit(pwd & i);
     }
     // Send a zero bit separation
     T55xxWriteBit(0);
 
     // Send Block number (if direct access mode)
-    if (!RegReadMode)
+    if (!regular_readmode)
         for (i = 0x04; i != 0; i >>= 1)
-            T55xxWriteBit(Block & i);
+            T55xxWriteBit(block & i);
 
     // Turn field on to read the response
     // 137*8 seems to get to the start of data pretty well...
     // but we want to go past the start and let the repeating data settle in...
-    TurnReadLFOn(200 * 8);
+    TurnReadLFOn(150 * 8);
 
     // Acquisition
     // Now do the acquisition
@@ -1538,7 +1538,7 @@ void T55xxReadBlock(uint16_t arg0, uint8_t Block, uint32_t Pwd) {
     // Turn the field off
     if (!brute_mem) {
         FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
-        cmd_send(CMD_ACK, 0, 0, 0, 0, 0);
+        reply_ng(CMD_T55XX_READ_BLOCK, PM3_SUCCESS, NULL, 0);
         LED_A_OFF();
     }
 }
@@ -1558,7 +1558,9 @@ void T55xx_ChkPwds() {
     uint8_t x = 32;
     while (x--) {
         b1 = 0;
-        T55xxReadBlock(4, 1, 0);
+
+//        T55xxReadBlock(uint8_t page, bool pwd_mode, bool brute_mem, uint8_t block, uint32_t pwd)
+        T55xxReadBlock(0, 0, true, 1, 0);
         for (uint16_t j = 0; j < 1024; ++j)
             b1 += buf[j];
 
@@ -1569,7 +1571,6 @@ void T55xx_ChkPwds() {
 
     baseline >>= 5;
     Dbprintf("[=] Baseline determined [%u]", baseline);
-
 
     uint8_t *pwds = BigBuf_get_EM_addr();
     uint16_t pwdCount = 0;
@@ -1598,14 +1599,13 @@ void T55xx_ChkPwds() {
     uint32_t pwd = 0, curr = 0, prev = 0;
     for (uint16_t i = 0; i < pwdCount; ++i) {
 
-        if (BUTTON_PRESS() && !usb_poll_validate_length()) {
+        if (BUTTON_PRESS() && !data_available()) {
             goto OUT;
         }
 
         pwd = bytes_to_num(pwds + i * 4, 4);
 
-
-        T55xxReadBlock(5, 0, pwd);
+        T55xxReadBlock(0, true, true, 0, pwd);
 
         // calc mean of BigBuf 1024 samples.
         uint32_t sum = 0;
@@ -1635,7 +1635,7 @@ void T55xx_ChkPwds() {
 
 OUT:
     FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
-    cmd_send(CMD_ACK, ret, candidate, 0, 0, 0);
+    reply_old(CMD_ACK, ret, candidate, 0, 0, 0);
     LEDsoff();
 }
 
@@ -1731,14 +1731,15 @@ void CopyIOtoT55x7(uint32_t hi, uint32_t lo) {
 // Clone Indala 64-bit tag by UID to T55x7
 void CopyIndala64toT55x7(uint32_t hi, uint32_t lo) {
     //Program the 2 data blocks for supplied 64bit UID
-    // and the Config for Indala 64 format (RF/32;PSK2 with RF/2;Maxblock=2)
-    uint32_t data[] = { T55x7_BITRATE_RF_32 | T55x7_MODULATION_PSK2 | (2 << T55x7_MAXBLOCK_SHIFT), hi, lo};
+    // and the Config for Indala 64 format (RF/32;PSK1 with RF/2;Maxblock=2)
+    uint32_t data[] = { T55x7_BITRATE_RF_32 | T55x7_MODULATION_PSK1 | (2 << T55x7_MAXBLOCK_SHIFT), hi, lo};
     //TODO add selection of chip for Q5 or T55x7
-    // data[0] = T5555_SET_BITRATE(32 | T5555_MODULATION_PSK2 | 2 << T5555_MAXBLOCK_SHIFT;
-
+    // data[0] = T5555_SET_BITRATE(32 | T5555_MODULATION_PSK1 | 2 << T5555_MAXBLOCK_SHIFT;
+    LED_D_ON();
     WriteT55xx(data, 0, 3);
-    //Alternative config for Indala (Extended mode;RF/32;PSK2 with RF/2;Maxblock=2;Inverse data)
+    //Alternative config for Indala (Extended mode;RF/32;PSK1 with RF/2;Maxblock=2;Inverse data)
     // T5567WriteBlock(0x603E1042,0);
+    LED_D_OFF();
 }
 // Clone Indala 224-bit tag by UID to T55x7
 void CopyIndala224toT55x7(uint32_t uid1, uint32_t uid2, uint32_t uid3, uint32_t uid4, uint32_t uid5, uint32_t uid6, uint32_t uid7) {
@@ -1749,9 +1750,11 @@ void CopyIndala224toT55x7(uint32_t uid1, uint32_t uid2, uint32_t uid3, uint32_t 
     data[0] = T55x7_BITRATE_RF_32 | T55x7_MODULATION_PSK2 | (7 << T55x7_MAXBLOCK_SHIFT);
     //TODO add selection of chip for Q5 or T55x7
     // data[0] =  T5555_SET_BITRATE(32 | T5555_MODULATION_PSK2 | 7 << T5555_MAXBLOCK_SHIFT;
+    LED_D_ON();
     WriteT55xx(data, 0, 8);
-    //Alternative config for Indala (Extended mode;RF/32;PSK2 with RF/2;Maxblock=7;Inverse data)
+    //Alternative config for Indala (Extended mode;RF/32;PSK1 with RF/2;Maxblock=7;Inverse data)
     // T5567WriteBlock(0x603E10E2,0);
+    LED_D_OFF();
 }
 // clone viking tag to T55xx
 void CopyVikingtoT55xx(uint32_t block1, uint32_t block2, uint8_t Q5) {
@@ -1760,7 +1763,7 @@ void CopyVikingtoT55xx(uint32_t block1, uint32_t block2, uint8_t Q5) {
     // Program the data blocks for supplied ID and the block 0 config
     WriteT55xx(data, 0, 3);
     LED_D_OFF();
-    cmd_send(CMD_ACK, 0, 0, 0, 0, 0);
+    reply_old(CMD_ACK, 0, 0, 0, 0, 0);
 }
 
 // Define 9bit header for EM410x tags
@@ -1768,7 +1771,7 @@ void CopyVikingtoT55xx(uint32_t block1, uint32_t block2, uint8_t Q5) {
 #define EM410X_ID_LENGTH 40
 
 void WriteEM410x(uint32_t card, uint32_t id_hi, uint32_t id_lo) {
-    int i, id_bit;
+    int i;
     uint64_t id = EM410X_HEADER;
     uint64_t rev_id = 0; // reversed ID
     int c_parity[4];     // column parity
@@ -1787,7 +1790,7 @@ void WriteEM410x(uint32_t card, uint32_t id_hi, uint32_t id_lo) {
     }
 
     for (i = 0; i < EM410X_ID_LENGTH; ++i) {
-        id_bit = rev_id & 1;
+        int id_bit = rev_id & 1;
 
         if (i % 4 == 0) {
             // Don't write row parity bit at start of parsing
@@ -1923,7 +1926,6 @@ uint8_t Prepare_Addr(uint8_t addr) {
 //====================================================================
 uint8_t Prepare_Data(uint16_t data_low, uint16_t data_hi) {
 
-    register uint8_t line_parity;
     register uint8_t column_parity;
     register uint8_t i, j;
     register uint16_t data;
@@ -1932,7 +1934,7 @@ uint8_t Prepare_Data(uint16_t data_low, uint16_t data_hi) {
     column_parity = 0;
 
     for (i = 0; i < 4; i++) {
-        line_parity = 0;
+        register uint8_t line_parity = 0;
         for (j = 0; j < 8; j++) {
             line_parity ^= data;
             column_parity ^= (data & 1) << j;
@@ -2032,16 +2034,13 @@ void EM4xReadWord(uint8_t addr, uint32_t pwd, uint8_t usepwd) {
     DoPartialAcquisition(20, true, 6000, 1000);
 
     FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
-    cmd_send(CMD_ACK, 0, 0, 0, 0, 0);
+    reply_ng(CMD_EM4X_READ_WORD, PM3_SUCCESS, NULL, 0);
     LED_A_OFF();
 }
 
-void EM4xWriteWord(uint32_t flag, uint32_t data, uint32_t pwd) {
+void EM4xWriteWord(uint8_t addr, uint32_t data, uint32_t pwd, uint8_t usepwd) {
 
     LED_A_ON();
-
-    bool usePwd = (flag & 0xF);
-    uint8_t addr = (flag >> 8) & 0xFF;
     uint8_t len;
 
     //clear buffer now so it does not interfere with timing later
@@ -2053,7 +2052,7 @@ void EM4xWriteWord(uint32_t flag, uint32_t data, uint32_t pwd) {
     * 0000 1010 ok.
     * 0000 0001 fail
     **/
-    if (usePwd) EM4xLogin(pwd);
+    if (usepwd) EM4xLogin(pwd);
 
     forward_ptr = forwardLink_data;
     len = Prepare_Cmd(FWD_CMD_WRITE);
@@ -2068,7 +2067,7 @@ void EM4xWriteWord(uint32_t flag, uint32_t data, uint32_t pwd) {
     DoPartialAcquisition(20, true, 6000, 1000);
 
     FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
-    cmd_send(CMD_ACK, 0, 0, 0, 0, 0);
+    reply_ng(CMD_EM4X_WRITE_WORD, PM3_SUCCESS, NULL, 0);
     LED_A_OFF();
 }
 
@@ -2122,7 +2121,7 @@ void Cotag(uint32_t arg0) {
 
     // Turn the field off
     FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF); // field off
-    cmd_send(CMD_ACK, 0, 0, 0, 0, 0);
+    reply_old(CMD_ACK, 0, 0, 0, 0, 0);
     LEDsoff();
 }
 

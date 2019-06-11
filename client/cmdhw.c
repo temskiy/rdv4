@@ -6,6 +6,7 @@
 // the license.
 //-----------------------------------------------------------------------------
 // Hardware commands
+// low-level hardware control
 //-----------------------------------------------------------------------------
 
 #include <stdio.h>
@@ -19,9 +20,66 @@
 #include "cmdmain.h"
 #include "cmddata.h"
 
-/* low-level hardware control */
-
 static int CmdHelp(const char *Cmd);
+
+static int usage_dbg(void) {
+    PrintAndLogEx(NORMAL, "Usage:  hw dbg [h] <debug level>");
+    PrintAndLogEx(NORMAL, "Options:");
+    PrintAndLogEx(NORMAL, "           h    this help");
+    PrintAndLogEx(NORMAL, "       <debug level>  (Optional) see list for valid levels");
+    PrintAndLogEx(NORMAL, "           0 - no debug messages");
+    PrintAndLogEx(NORMAL, "           1 - error messages");
+    PrintAndLogEx(NORMAL, "           2 - plus information messages");
+    PrintAndLogEx(NORMAL, "           3 - plus debug messages");
+    PrintAndLogEx(NORMAL, "           4 - print even debug messages in timing critical functions");
+    PrintAndLogEx(NORMAL, "               Note: this option therefore may cause malfunction itself");
+    PrintAndLogEx(NORMAL, "Examples:");
+    PrintAndLogEx(NORMAL, "           hw dbg 3");
+    return 0;
+}
+
+static int usage_hw_detectreader(void) {
+    PrintAndLogEx(NORMAL, "Start to detect presences of reader field");
+    PrintAndLogEx(NORMAL, "press pm3 button to change modes and finally exit");
+    PrintAndLogEx(NORMAL, "");
+    PrintAndLogEx(NORMAL, "Usage:  hw detectreader [h] <L|H>");
+    PrintAndLogEx(NORMAL, "Options:");
+    PrintAndLogEx(NORMAL, "       h          This help");
+    PrintAndLogEx(NORMAL, "       <type>     L = 125/134 kHz, H = 13.56 MHz");
+    PrintAndLogEx(NORMAL, "");
+    PrintAndLogEx(NORMAL, "Examples:");
+    PrintAndLogEx(NORMAL, "      hw detectreader L");
+    return PM3_SUCCESS;
+}
+
+static int usage_hw_setmux(void) {
+    PrintAndLogEx(NORMAL, "Set the ADC mux to a specific value");
+    PrintAndLogEx(NORMAL, "");
+    PrintAndLogEx(NORMAL, "Usage:  hw setmux [h] <lopkd | loraw | hipkd | hiraw>");
+    PrintAndLogEx(NORMAL, "Options:");
+    PrintAndLogEx(NORMAL, "       h          This help");
+    PrintAndLogEx(NORMAL, "       <type>     Low peak, Low raw, Hi peak, Hi raw");
+    PrintAndLogEx(NORMAL, "");
+    PrintAndLogEx(NORMAL, "Examples:");
+    PrintAndLogEx(NORMAL, "      hw setmux lopkd");
+    return PM3_SUCCESS;
+}
+
+static int usage_hw_connect(void) {
+    PrintAndLogEx(NORMAL, "Connects to a Proxmark3 device via specified serial port");
+    PrintAndLogEx(NORMAL, "Baudrate here is only for physical UART or UART-BT, " _YELLOW_("not")"for USB-CDC or blue shark add-on");
+    PrintAndLogEx(NORMAL, "");
+    PrintAndLogEx(NORMAL, "Usage:  hw connect [h] [p <port>] [b <baudrate>]");
+    PrintAndLogEx(NORMAL, "Options:");
+    PrintAndLogEx(NORMAL, "       h              This help");
+    PrintAndLogEx(NORMAL, "       p <port>       Serial port to connect to, else retry the last used one");
+    PrintAndLogEx(NORMAL, "       b <baudrate>   Baudrate");
+    PrintAndLogEx(NORMAL, "");
+    PrintAndLogEx(NORMAL, "Examples:");
+    PrintAndLogEx(NORMAL, "      hw connect p "SERIAL_PORT_EXAMPLE_H);
+    PrintAndLogEx(NORMAL, "      hw connect p "SERIAL_PORT_EXAMPLE_H" b 115200");
+    return PM3_SUCCESS;
+}
 
 static void lookupChipID(uint32_t iChipID, uint32_t mem_used) {
     char asBuff[120];
@@ -307,192 +365,285 @@ static void lookupChipID(uint32_t iChipID, uint32_t mem_used) {
     PrintAndLogEx(NORMAL, "  --= Nonvolatile Program Memory Type: %s", asBuff);
 }
 
-int CmdDetectReader(const char *Cmd) {
-    UsbCommand c = {CMD_LISTEN_READER_FIELD};
-    // 'l' means LF - 125/134 kHz
-    if (*Cmd == 'l') {
-        c.arg[0] = 1;
-    } else if (*Cmd == 'h') {
-        c.arg[0] = 2;
-    } else if (*Cmd != '\0') {
-        PrintAndLogEx(NORMAL, "use 'detectreader' or 'detectreader l' or 'detectreader h'");
-        return 0;
+int CmdDbg(const char *Cmd) {
+
+    char ctmp = tolower(param_getchar(Cmd, 0));
+    if (strlen(Cmd) < 1 || ctmp == 'h') return usage_dbg();
+
+    uint8_t dbgMode = param_get8ex(Cmd, 0, 0, 10);
+    if (dbgMode > 4) return usage_dbg();
+
+    SendCommandNG(CMD_SET_DBGMODE, &dbgMode, 1);
+    return PM3_SUCCESS;
+}
+
+static int CmdDetectReader(const char *Cmd) {
+    uint8_t arg = 0;
+    char c = toupper(Cmd[0]);
+    switch (c) {
+        case 'L':
+            arg = 1;
+            break;
+        case 'H':
+            arg = 2;
+            break;
+        default: {
+            usage_hw_detectreader();
+            return PM3_EINVARG;
+        }
     }
+
     clearCommandBuffer();
-    SendCommand(&c);
-    return 0;
+    SendCommandNG(CMD_LISTEN_READER_FIELD, (uint8_t *)&arg, sizeof(arg));
+    return PM3_SUCCESS;
 }
 
 // ## FPGA Control
-int CmdFPGAOff(const char *Cmd) {
-    UsbCommand c = {CMD_FPGA_MAJOR_MODE_OFF};
+static int CmdFPGAOff(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
     clearCommandBuffer();
-    SendCommand(&c);
-    return 0;
+    SendCommandNG(CMD_FPGA_MAJOR_MODE_OFF, NULL, 0);
+    return PM3_SUCCESS;
 }
 
-#ifdef WITH_LCD
-int CmdLCD(const char *Cmd) {
+static int CmdLCD(const char *Cmd) {
     int i, j;
-
-    UsbCommand c = {CMD_LCD};
     sscanf(Cmd, "%x %d", &i, &j);
     while (j--) {
-        c.arg[0] = i & 0x1ff;
         clearCommandBuffer();
-        SendCommand(&c);
+        SendCommandMIX(CMD_LCD, i & 0x1ff, 0, 0, NULL, 0);
     }
-    return 0;
+    return PM3_SUCCESS;
 }
 
-int CmdLCDReset(const char *Cmd) {
-    UsbCommand c = {CMD_LCD_RESET, {strtol(Cmd, NULL, 0), 0, 0}};
+static int CmdLCDReset(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
     clearCommandBuffer();
-    SendCommand(&c);
-    return 0;
-}
-#endif
-
-int CmdReadmem(const char *Cmd) {
-    UsbCommand c = {CMD_READ_MEM, {strtol(Cmd, NULL, 0), 0, 0}};
-    clearCommandBuffer();
-    SendCommand(&c);
-    return 0;
+    SendCommandNG(CMD_LCD_RESET, NULL, 0);
+    return PM3_SUCCESS;
 }
 
-int CmdReset(const char *Cmd) {
-    UsbCommand c = {CMD_HARDWARE_RESET};
+static int CmdReadmem(const char *Cmd) {
+    uint32_t address = strtol(Cmd, NULL, 0);
     clearCommandBuffer();
-    SendCommand(&c);
-    return 0;
+    SendCommandNG(CMD_READ_MEM, (uint8_t *)&address, sizeof(address));
+    return PM3_SUCCESS;
+}
+
+static int CmdReset(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
+    clearCommandBuffer();
+    SendCommandNG(CMD_HARDWARE_RESET, NULL, 0);
+    PrintAndLogEx(INFO, "Proxmark3 has been reset.");
+    return PM3_SUCCESS;
 }
 
 /*
  * Sets the divisor for LF frequency clock: lets the user choose any LF frequency below
  * 600kHz.
  */
-int CmdSetDivisor(const char *Cmd) {
-    UsbCommand c = {CMD_SET_LF_DIVISOR, {strtol(Cmd, NULL, 0), 0, 0}};
+static int CmdSetDivisor(const char *Cmd) {
+    uint8_t arg = param_get8ex(Cmd, 0, 95, 10);
 
-    if (c.arg[0] < 19 || c.arg[0] > 255) {
-        PrintAndLogEx(NORMAL, "divisor must be between 19 and 255");
-        return 1;
+    if (arg < 19) {
+        PrintAndLogEx(ERR, "divisor must be between 19 and 255");
+        return PM3_EINVARG;
     }
     // 12 000 000 (12Mhz)
     clearCommandBuffer();
-    SendCommand(&c);
-    PrintAndLogEx(NORMAL, "Divisor set, expected %.1f KHz", ((double)12000 / (c.arg[0] + 1)));
-    return 0;
+    SendCommandNG(CMD_SET_LF_DIVISOR, (uint8_t *)&arg, sizeof(arg));
+    PrintAndLogEx(SUCCESS, "Divisor set, expected %.1f kHz", ((double)12000 / (arg + 1)));
+    return PM3_SUCCESS;
 }
 
-int CmdSetMux(const char *Cmd) {
+static int CmdSetMux(const char *Cmd) {
 
     if (strlen(Cmd) < 5) {
-        PrintAndLogEx(NORMAL, "expected:  lopkd | loraw | hipkd | hiraw");
-        return 1;
+        usage_hw_setmux();
+        return PM3_EINVARG;
     }
 
-    UsbCommand c = {CMD_SET_ADC_MUX};
+    str_lower((char *)Cmd);
 
-    if (strcmp(Cmd, "lopkd") == 0)      c.arg[0] = 0;
-    else if (strcmp(Cmd, "loraw") == 0) c.arg[0] = 1;
-    else if (strcmp(Cmd, "hipkd") == 0) c.arg[0] = 2;
-    else if (strcmp(Cmd, "hiraw") == 0) c.arg[0] = 3;
+    uint8_t arg = 0;
+    if (strcmp(Cmd, "lopkd") == 0)      arg = 0;
+    else if (strcmp(Cmd, "loraw") == 0) arg = 1;
+    else if (strcmp(Cmd, "hipkd") == 0) arg = 2;
+    else if (strcmp(Cmd, "hiraw") == 0) arg = 3;
+    else {
+        usage_hw_setmux();
+        return PM3_EINVARG;
+    }
     clearCommandBuffer();
-    SendCommand(&c);
-    return 0;
+    SendCommandNG(CMD_SET_ADC_MUX, (uint8_t *)&arg, sizeof(arg));
+    return PM3_SUCCESS;
 }
 
-int CmdTune(const char *Cmd) {
+static int CmdTune(const char *Cmd) {
     return CmdTuneSamples(Cmd);
 }
 
-int CmdVersion(const char *Cmd) {
+static int CmdVersion(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
+    pm3_version(true);
+    return PM3_SUCCESS;
+}
 
-    bool silent = (Cmd[0] == 's' || Cmd[0] ==  'S');
-    if (silent)
-        return 0;
-
-    UsbCommand c = {CMD_VERSION, {0, 0, 0}};
-    UsbCommand resp;
+static int CmdStatus(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
     clearCommandBuffer();
-    SendCommand(&c);
-    if (WaitForResponseTimeout(CMD_ACK, &resp, 1000)) {
-#ifdef __WIN32
-        PrintAndLogEx(NORMAL, "\n [ Proxmark3 RFID instrument ]\n");
-#else
-        PrintAndLogEx(NORMAL, "\n\e[34m [ Proxmark3 RFID instrument ]\e[0m\n");
-#endif
-        char s[50] = {0};
-#if defined(WITH_FLASH) || defined(WITH_SMARTCARD) || defined(WITH_FPC)
-        strncat(s, "build for RDV40 with ", sizeof(s) - strlen(s) - 1);
-#endif
-#ifdef WITH_FLASH
-        strncat(s, "flashmem; ", sizeof(s) - strlen(s) - 1);
-#endif
-#ifdef WITH_SMARTCARD
-        strncat(s, "smartcard; ", sizeof(s) - strlen(s) - 1);
-#endif
-#ifdef WITH_FPC
-        strncat(s, "fpc; ", sizeof(s) - strlen(s) - 1);
-#endif
-        PrintAndLogEx(NORMAL, "\n [ CLIENT ]");
-        PrintAndLogEx(NORMAL, "  client: iceman %s \n", s);
+    PacketResponseNG resp;
+    SendCommandNG(CMD_STATUS, NULL, 0);
+    if (!WaitForResponseTimeout(CMD_ACK, &resp, 2000))
+        PrintAndLogEx(WARNING, "Status command failed. Communication speed test timed out");
+    return PM3_SUCCESS;
+}
 
-        PrintAndLogEx(NORMAL, (char *)resp.d.asBytes);
-        lookupChipID(resp.arg[0], resp.arg[1]);
+static int CmdPing(const char *Cmd) {
+    uint32_t len = strtol(Cmd, NULL, 0);
+    if (len > PM3_CMD_DATA_SIZE)
+        len = PM3_CMD_DATA_SIZE;
+    if (len) {
+        PrintAndLogEx(INFO, "Ping sent with payload len=%d", len);
+    } else {
+        PrintAndLogEx(INFO, "Ping sent");
     }
-    PrintAndLogEx(NORMAL, "\n");
-    return 0;
+    clearCommandBuffer();
+    PacketResponseNG resp;
+    uint8_t data[PM3_CMD_DATA_SIZE] = {0};
+    for (uint16_t i = 0; i < len; i++)
+        data[i] = i & 0xFF;
+    SendCommandNG(CMD_PING, data, len);
+    if (WaitForResponseTimeout(CMD_PING, &resp, 1000)) {
+        bool error = false;
+        if (len) {
+            error = memcmp(data, resp.data.asBytes, len) != 0;
+            PrintAndLogEx((error) ? ERR : SUCCESS, "Ping response " _GREEN_("received") "and content is %s", error ? _RED_("NOT ok") : _GREEN_("ok"));
+        } else {
+            PrintAndLogEx((error) ? ERR : SUCCESS, "Ping response " _GREEN_("received"));
+        }
+    } else
+        PrintAndLogEx(WARNING, "Ping response " _RED_("timeout"));
+    return PM3_SUCCESS;
 }
 
-int CmdStatus(const char *Cmd) {
-    clearCommandBuffer();
-    UsbCommand c = {CMD_STATUS};
-    SendCommand(&c);
-    if (!WaitForResponseTimeout(CMD_ACK, &c, 1900))
-        PrintAndLogEx(NORMAL, "Status command failed. USB Speed Test timed out");
-    return 0;
-}
+static int CmdConnect(const char *Cmd) {
 
-int CmdPing(const char *Cmd) {
-    clearCommandBuffer();
-    UsbCommand resp;
-    UsbCommand c = {CMD_PING};
-    SendCommand(&c);
-    if (WaitForResponseTimeout(CMD_ACK, &resp, 1000))
-        PrintAndLogEx(NORMAL, "Ping successful");
-    else
-        PrintAndLogEx(NORMAL, "Ping failed");
-    return 0;
+    uint32_t baudrate = USART_BAUD_RATE;
+    uint8_t cmdp = 0;
+    char port[FILE_PATH_SIZE] = {0};
+
+    while (param_getchar(Cmd, cmdp) != 0x00) {
+        switch (tolower(param_getchar(Cmd, cmdp))) {
+            case 'h':
+                return usage_hw_connect();
+            case 'p': {
+                param_getstr(Cmd, cmdp + 1, port, sizeof(port));
+                cmdp += 2;
+                break;
+            }
+            case 'b':
+                baudrate = param_get32ex(Cmd, cmdp + 1, USART_BAUD_RATE, 10);
+                if (baudrate == 0)
+                    return usage_hw_connect();
+                cmdp += 2;
+                break;
+            default:
+                usage_hw_connect();
+                return PM3_EINVARG;
+        }
+    }
+
+    // default back to previous used serial port
+    if (strlen(port) == 0) {
+        if (strlen((char *)conn.serial_port_name) == 0) {
+            return usage_hw_connect();
+        }
+        memcpy(port, conn.serial_port_name, sizeof(port));
+    }
+
+    printf("Port:: %s  Baud:: %u\n", port, baudrate);
+
+    if (session.pm3_present) {
+        CloseProxmark();
+    }
+
+    // 10 second timeout
+    OpenProxmark(port, false, 10, false, baudrate);
+
+    if (session.pm3_present && (TestProxmark() != PM3_SUCCESS)) {
+        PrintAndLogEx(ERR, _RED_("ERROR:") "cannot communicate with the Proxmark3\n");
+        CloseProxmark();
+    }
+    return PM3_SUCCESS;
 }
 
 static command_t CommandTable[] = {
-    {"help",          CmdHelp,        1, "This help"},
-    {"detectreader",  CmdDetectReader, 0, "['l'|'h'] -- Detect external reader field (option 'l' or 'h' to limit to LF or HF)"},
-    {"fpgaoff",       CmdFPGAOff,     0, "Set FPGA off"},
-#ifdef WITH_LCD
-    {"lcd",           CmdLCD,         0, "<HEX command> <count> -- Send command/data to LCD"},
-    {"lcdreset",      CmdLCDReset,    0, "Hardware reset LCD"},
-#endif
-    {"readmem",       CmdReadmem,     0, "[address] -- Read memory at decimal address from flash"},
-    {"reset",         CmdReset,       0, "Reset the Proxmark3"},
-    {"setlfdivisor",  CmdSetDivisor,  0, "<19 - 255> -- Drive LF antenna at 12Mhz/(divisor+1)"},
-    {"setmux",        CmdSetMux,      0, "<loraw|hiraw|lopkd|hipkd> -- Set the ADC mux to a specific value"},
-    {"tune",          CmdTune,        0, "Measure antenna tuning"},
-    {"version",       CmdVersion,     0, "Show version information about the connected Proxmark"},
-    {"status",        CmdStatus,      0, "Show runtime status information about the connected Proxmark"},
-    {"ping",          CmdPing,        0, "Test if the pm3 is responsive"},
-    {NULL, NULL, 0, NULL}
+    {"help",          CmdHelp,        AlwaysAvailable, "This help"},
+    {"dbg",           CmdDbg,         IfPm3Present,    "Set Proxmark3 debug level"},
+    {"connect",       CmdConnect,     AlwaysAvailable, "connect Proxmark3 to serial port"},
+    {"detectreader",  CmdDetectReader, IfPm3Present,    "['l'|'h'] -- Detect external reader field (option 'l' or 'h' to limit to LF or HF)"},
+    {"fpgaoff",       CmdFPGAOff,     IfPm3Present,    "Set FPGA off"},
+    {"lcd",           CmdLCD,         IfPm3Lcd,        "<HEX command> <count> -- Send command/data to LCD"},
+    {"lcdreset",      CmdLCDReset,    IfPm3Lcd,        "Hardware reset LCD"},
+    {"ping",          CmdPing,        IfPm3Present,    "Test if the Proxmark3 is responsive"},
+    {"readmem",       CmdReadmem,     IfPm3Present,    "[address] -- Read memory at decimal address from flash"},
+    {"reset",         CmdReset,       IfPm3Present,    "Reset the Proxmark3"},
+    {"setlfdivisor",  CmdSetDivisor,  IfPm3Present,    "<19 - 255> -- Drive LF antenna at 12Mhz/(divisor+1)"},
+    {"setmux",        CmdSetMux,      IfPm3Present,    "Set the ADC mux to a specific value"},
+    {"status",        CmdStatus,      IfPm3Present,    "Show runtime status information about the connected Proxmark3"},
+    {"tune",          CmdTune,        IfPm3Present,    "Measure antenna tuning"},
+    {"version",       CmdVersion,     IfPm3Present,    "Show version information about the connected Proxmark3"},
+    {NULL, NULL, NULL, NULL}
 };
+
+static int CmdHelp(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
+    CmdsHelp(CommandTable);
+    return PM3_SUCCESS;
+}
 
 int CmdHW(const char *Cmd) {
     clearCommandBuffer();
-    CmdsParse(CommandTable, Cmd);
-    return 0;
+    return CmdsParse(CommandTable, Cmd);
 }
 
-int CmdHelp(const char *Cmd) {
-    CmdsHelp(CommandTable);
-    return 0;
+void pm3_version(bool verbose) {
+    if (!verbose)
+        return;
+
+    PacketResponseNG resp;
+    clearCommandBuffer();
+
+    SendCommandNG(CMD_VERSION, NULL, 0);
+
+    if (WaitForResponseTimeout(CMD_VERSION, &resp, 1000)) {
+        PrintAndLogEx(NORMAL, "\n" _BLUE_(" [ Proxmark3 RFID instrument ]") "\n");
+        PrintAndLogEx(NORMAL, "\n [ CLIENT ]");
+        PrintAndLogEx(NORMAL, "  client: RRG/Iceman"); // TODO version info?
+        PrintAndLogEx(NORMAL, "\n [ PROXMARK RDV4 ]");
+        PrintAndLogEx(NORMAL, "  external flash:                  %s", IfPm3Flash() ? _GREEN_("present") : _YELLOW_("absent"));
+        PrintAndLogEx(NORMAL, "  smartcard reader:                %s", IfPm3Smartcard() ? _GREEN_("present") : _YELLOW_("absent"));
+        PrintAndLogEx(NORMAL, "\n [ PROXMARK RDV4 Extras ]");
+        PrintAndLogEx(NORMAL, "  FPC USART for BT add-on support: %s", IfPm3FpcUsartHost() ? _GREEN_("present") : _YELLOW_("absent"));
+
+        if (IfPm3FpcUsartDevFromUsb())
+            PrintAndLogEx(NORMAL, "  FPC USART for developer support: %s", _GREEN_("present"));
+
+        PrintAndLogEx(NORMAL, "");
+
+        struct p {
+            uint32_t id;
+            uint32_t section_size;
+            uint32_t versionstr_len;
+            char versionstr[PM3_CMD_DATA_SIZE - 12];
+        } PACKED;
+
+        struct p *payload = (struct p *)&resp.data.asBytes;
+
+        PrintAndLogEx(NORMAL,  payload->versionstr);
+
+        lookupChipID(payload->id, payload->section_size);
+    }
+    PrintAndLogEx(NORMAL, "\n");
 }

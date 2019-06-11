@@ -161,7 +161,7 @@ static CborError dumprecursive(uint8_t cmdCode, bool isResponse, CborValue *it, 
                 if (cmdCode > 0 && nestingLevel == 1 && isMapType && !(elmCount % 2)) {
                     int64_t val;
                     cbor_value_get_int64(it, &val);
-                    char *desc = fido2GetCmdMemberDescription(cmdCode, isResponse, val);
+                    const char *desc = fido2GetCmdMemberDescription(cmdCode, isResponse, val);
                     if (desc)
                         printf(" (%s)", desc);
                 }
@@ -184,7 +184,7 @@ static CborError dumprecursive(uint8_t cmdCode, bool isResponse, CborValue *it, 
     return CborNoError;
 }
 
-int TinyCborInit(uint8_t *data, size_t length, CborValue *cb) {
+static int TinyCborInit(uint8_t *data, size_t length, CborValue *cb) {
     CborParser parser;
     CborError err = cbor_parser_init(data, length, 0, &parser, cb);
     if (err)
@@ -204,19 +204,17 @@ int TinyCborPrintFIDOPackage(uint8_t cmdCode, bool isResponse, uint8_t *data, si
 
     if (err) {
         fprintf(stderr,
-#if __WORDSIZE == 64
-                "CBOR parsing failure at offset %" PRId64 " : %s\n",
-#else
                 "CBOR parsing failure at offset %" PRId32 " : %s\n",
-#endif
-                cb.ptr - data, cbor_error_string(err));
+                (uint32_t)(cb.ptr - data),
+                cbor_error_string(err)
+               );
         return 1;
     }
 
     return 0;
 }
 
-int JsonObjElmCount(json_t *elm) {
+static int JsonObjElmCount(json_t *elm) {
     int res = 0;
     const char *key;
     json_t *value;
@@ -459,7 +457,7 @@ CborError CborGetStringValueBuf(CborValue *elm) {
     return CborGetStringValue(elm, stringBuf, sizeof(stringBuf), NULL);
 };
 
-int CBOREncodeElm(json_t *root, char *rootElmId, CborEncoder *encoder) {
+int CBOREncodeElm(json_t *root, const char *rootElmId, CborEncoder *encoder) {
     json_t *elm = NULL;
     if (rootElmId && strlen(rootElmId) && rootElmId[0] == '$')
         elm = json_path_get(root, rootElmId);

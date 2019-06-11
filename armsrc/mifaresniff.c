@@ -10,6 +10,10 @@
 
 #include "mifaresniff.h"
 
+#ifndef CheckCrc14A
+# define CheckCrc14A(data, len)	check_crc(CRC_14443_A, (data), (len))
+#endif
+
 //static int sniffState = SNF_INIT;
 static uint8_t sniffUIDType = 0;
 static uint8_t sniffUID[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -52,8 +56,7 @@ void RAMFUNC SniffMifare(uint8_t param) {
     uint8_t *dmaBuf = BigBuf_malloc(DMA_BUFFER_SIZE);
     uint8_t *data = dmaBuf;
     uint8_t previous_data = 0;
-    int maxDataLen = 0;
-    int dataLen = 0;
+    int dataLen, maxDataLen = 0;
     bool ReaderIsActive = false;
     bool TagIsActive = false;
 
@@ -73,7 +76,7 @@ void RAMFUNC SniffMifare(uint8_t param) {
     // Setup and start DMA.
     // set transfer address and number of bytes. Start transfer.
     if (!FpgaSetupSscDma(dmaBuf, DMA_BUFFER_SIZE)) {
-        if (MF_DBGLEVEL > 1) Dbprintf("[!] FpgaSetupSscDma failed. Exiting");
+        if (DBGLEVEL > 1) Dbprintf("[!] FpgaSetupSscDma failed. Exiting");
         return;
     }
 
@@ -187,7 +190,7 @@ void MfSniffInit(void) {
 
 void MfSniffEnd(void) {
     LED_B_ON();
-    cmd_send(CMD_ACK, 0, 0, 0, 0, 0);
+    reply_old(CMD_ACK, 0, 0, 0, 0, 0);
     LED_B_OFF();
 }
 
@@ -229,7 +232,7 @@ bool RAMFUNC MfSniffLogic(const uint8_t *data, uint16_t len, uint8_t *parity, ui
 
             if ( !reader ) break;
             if ( len != 9 ) break;
-            if ( !CheckCrc14443(CRC_14443_A, data, 9)) break;
+            if ( !CheckCrc14A(data, 9)) break;
             if ( data[1] != 0x70 ) break;
 
             Dbprintf("[!] UID | %x", data[0]);
@@ -266,7 +269,7 @@ bool RAMFUNC MfSniffLogic(const uint8_t *data, uint16_t len, uint8_t *parity, ui
         }
         case SNF_SAK:{
             // SAK from card?
-            if ((!reader) && (len == 3) && (CheckCrc14443(CRC_14443_A, data, 3))) {
+            if ((!reader) && (len == 3) && (CheckCrc14A(data, 3))) {
                 sniffSAK = data[0];
                 // CL2 UID part to be expected
                 if (( sniffSAK == 0x04) && (sniffUIDType == SNF_UID_4)) {
@@ -307,19 +310,18 @@ bool RAMFUNC MfSniffLogic(const uint8_t *data, uint16_t len, uint8_t *parity, ui
 
 void RAMFUNC MfSniffSend() {
     uint16_t tracelen = BigBuf_get_traceLen();
-    uint16_t chunksize = 0;
     int packlen = tracelen; // total number of bytes to send
     uint8_t *data = BigBuf_get_addr();
 
     while (packlen > 0) {
         LED_B_ON();
-        chunksize = MIN(USB_CMD_DATA_SIZE, packlen); // chunk size 512
-        cmd_send(CMD_ACK, 1, tracelen, chunksize, data + tracelen - packlen, chunksize);
+        uint16_t chunksize = MIN(PM3_CMD_DATA_SIZE, packlen); // chunk size 512
+        reply_old(CMD_ACK, 1, tracelen, chunksize, data + tracelen - packlen, chunksize);
         packlen -= chunksize;
         LED_B_OFF();
     }
 
     LED_B_ON();
-    cmd_send(CMD_ACK, 2, 0, 0, 0, 0);  // 2 == data transfer finished.
+    reply_old(CMD_ACK, 2, 0, 0, 0, 0);  // 2 == data transfer finished.
     LED_B_OFF();
 }

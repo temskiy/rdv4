@@ -655,7 +655,6 @@ static RAMFUNC int ManchesterDecoding_iclass(uint32_t v) {
                     return false;
                 }
             }
-            error = 0;
         }
         return false;
     }
@@ -799,7 +798,7 @@ static RAMFUNC int ManchesterDecoding_iclass(uint32_t v) {
 // Both sides of communication!
 //=============================================================================
 static void iclass_setup_sniff(void) {
-    if (MF_DBGLEVEL > 3) Dbprintf("iclass_setup_sniff Enter");
+    if (DBGLEVEL > 3) Dbprintf("iclass_setup_sniff Enter");
 
     LEDsoff();
 
@@ -824,7 +823,7 @@ static void iclass_setup_sniff(void) {
     uart_init(BigBuf_malloc(ICLASS_BUFFER_SIZE));
     //UartInit(BigBuf_malloc(ICLASS_BUFFER_SIZE));
 
-    if (MF_DBGLEVEL > 1) {
+    if (DBGLEVEL > 1) {
         // Print debug information about the buffer sizes
         Dbprintf("[+] Sniffing buffers initialized:");
         Dbprintf("  Trace: %i bytes", BigBuf_max_traceLen());
@@ -842,7 +841,7 @@ static void iclass_setup_sniff(void) {
     StartCountSspClk();
 
     LED_A_ON();
-    if (MF_DBGLEVEL > 3) Dbprintf("[+] iclass_setup_sniff Exit");
+    if (DBGLEVEL > 3) Dbprintf("[+] iclass_setup_sniff Exit");
 }
 
 //-----------------------------------------------------------------------------
@@ -855,7 +854,7 @@ void RAMFUNC SniffIClass(void) {
 
     //int datalen = 0;
     uint32_t previous_data = 0;
-    uint32_t time_0 = 0, time_start = 0, time_stop  = 0;
+    uint32_t time_0 = 0, time_start = 0, time_stop;
     uint32_t sniffCounter = 0;
     bool TagIsActive = false;
     bool ReaderIsActive = false;
@@ -870,14 +869,14 @@ void RAMFUNC SniffIClass(void) {
 
     // Setup and start DMA.
     if (!FpgaSetupSscDma(dmaBuf, ICLASS_DMA_BUFFER_SIZE)) {
-        if (MF_DBGLEVEL > 1) DbpString("[-] FpgaSetupSscDma failed. Exiting");
+        if (DBGLEVEL > 1) DbpString("[-] FpgaSetupSscDma failed. Exiting");
         return;
     }
 
     // time ZERO, the point from which it all is calculated.
     time_0 = GetCountSspClk();
 
-    int div = 0;
+    int divi = 0;
     uint8_t tag_byte = 0, foo = 0;
     // loop and listen
     // every sample (1byte in data),
@@ -903,10 +902,10 @@ void RAMFUNC SniffIClass(void) {
         if (*data & 0xF) {
             //tag_byte <<= 1;
             tag_byte ^= (1 << 4);
-            foo ^= (1 << (3 - div));
+            foo ^= (1 << (3 - divi));
             Dbprintf(" %d|%x == %d|%x", tag_byte, tag_byte, foo, foo);
         }
-        div++;
+        divi++;
 
         // every odd sample
         if (sniffCounter & 0x01) {
@@ -961,11 +960,11 @@ void RAMFUNC SniffIClass(void) {
             }
             tag_byte = 0;
             foo = 0;
-            div = 0;
+            divi = 0;
         }
     } // end main loop
 
-    if (MF_DBGLEVEL >= 1) {
+    if (DBGLEVEL >= 1) {
         DbpString("[+] Sniff statistics:");
         Dbhexdump(ICLASS_DMA_BUFFER_SIZE, data, false);
     }
@@ -995,6 +994,7 @@ static bool GetIClassCommandFromReader(uint8_t *received, int *len, int maxLen) 
     FpgaWriteConfWord(FPGA_MAJOR_MODE_HF_ISO14443A | FPGA_HF_ISO14443A_TAGSIM_LISTEN);
     // clear RXRDY:
     uint8_t b = (uint8_t)AT91C_BASE_SSC->SSC_RHR;
+    (void)b;
 
     while (!BUTTON_PRESS()) {
         WDT_HIT();
@@ -1071,7 +1071,7 @@ static void CodeIClassTagAnswer(const uint8_t *cmd, int len) {
     /*
      * SOF comprises 3 parts;
      * * An unmodulated time of 56.64 us
-     * * 24 pulses of 423.75 KHz (fc/32)
+     * * 24 pulses of 423.75 kHz (fc/32)
      * * A logic 1, which starts with an unmodulated time of 18.88us
      *   followed by 8 pulses of 423.75kHz (fc/32)
      *
@@ -1149,7 +1149,7 @@ static void CodeIClassTagSOF() {
 // turn off afterwards
 void SimulateIClass(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_t *datain) {
 
-    if (MF_DBGLEVEL > 3) Dbprintf("[+] iClass_simulate Enter");
+    if (DBGLEVEL > 3) Dbprintf("[+] iClass_simulate Enter");
 
     LEDsoff();
 
@@ -1168,7 +1168,7 @@ void SimulateIClass(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_t *datain
 
     //Use the emulator memory for SIM
     uint8_t *emulator = BigBuf_get_EM_addr();
-    uint8_t mac_responses[USB_CMD_DATA_SIZE] = { 0 };
+    uint8_t mac_responses[PM3_CMD_DATA_SIZE] = { 0 };
 
     if (simType == 0) {
         // Use the CSN from commandline
@@ -1188,18 +1188,18 @@ void SimulateIClass(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_t *datain
         // in order to obtain the keys, as in the "dismantling iclass"-paper.
 #define EPURSE_MAC_SIZE 16
         int i = 0;
-        for (; i < numberOfCSNS && i * EPURSE_MAC_SIZE + 8 < USB_CMD_DATA_SIZE; i++) {
+        for (; i < numberOfCSNS && i * EPURSE_MAC_SIZE + 8 < PM3_CMD_DATA_SIZE; i++) {
             // The usb data is 512 bytes, fitting 65 8-byte CSNs in there.
 
             memcpy(emulator, datain + (i * 8), 8);
 
             if (doIClassSimulation(MODE_EXIT_AFTER_MAC, mac_responses + i * EPURSE_MAC_SIZE)) {
                 // Button pressed
-                cmd_send(CMD_ACK, CMD_SIMULATE_TAG_ICLASS, i, 0, mac_responses, i * EPURSE_MAC_SIZE);
+                reply_old(CMD_ACK, CMD_SIMULATE_TAG_ICLASS, i, 0, mac_responses, i * EPURSE_MAC_SIZE);
                 goto out;
             }
         }
-        cmd_send(CMD_ACK, CMD_SIMULATE_TAG_ICLASS, i, 0, mac_responses, i * EPURSE_MAC_SIZE);
+        reply_old(CMD_ACK, CMD_SIMULATE_TAG_ICLASS, i, 0, mac_responses, i * EPURSE_MAC_SIZE);
 
     } else if (simType == 3) {
         //This is 'full sim' mode, where we use the emulator storage for data.
@@ -1220,26 +1220,26 @@ void SimulateIClass(uint32_t arg0, uint32_t arg1, uint32_t arg2, uint8_t *datain
         // attack below is same as SIM 2, but we run the CSN twice to collected the mac for both keys.
         int i = 0;
         // The usb data is 512 bytes, fitting 65 8-byte CSNs in there.  iceman fork uses 9 CSNS
-        for (; i < numberOfCSNS && i * EPURSE_MAC_SIZE + 8 < USB_CMD_DATA_SIZE; i++) {
+        for (; i < numberOfCSNS && i * EPURSE_MAC_SIZE + 8 < PM3_CMD_DATA_SIZE; i++) {
 
             memcpy(emulator, datain + (i * 8), 8);
 
             // keyroll 1
             if (doIClassSimulation(MODE_EXIT_AFTER_MAC, mac_responses + i * EPURSE_MAC_SIZE)) {
-                cmd_send(CMD_ACK, CMD_SIMULATE_TAG_ICLASS, i * 2, 0, mac_responses, i * EPURSE_MAC_SIZE * 2);
+                reply_old(CMD_ACK, CMD_SIMULATE_TAG_ICLASS, i * 2, 0, mac_responses, i * EPURSE_MAC_SIZE * 2);
                 // Button pressed
                 goto out;
             }
 
             // keyroll 2
             if (doIClassSimulation(MODE_EXIT_AFTER_MAC, mac_responses + (i + numberOfCSNS) * EPURSE_MAC_SIZE)) {
-                cmd_send(CMD_ACK, CMD_SIMULATE_TAG_ICLASS, i * 2, 0, mac_responses, i * EPURSE_MAC_SIZE * 2);
+                reply_old(CMD_ACK, CMD_SIMULATE_TAG_ICLASS, i * 2, 0, mac_responses, i * EPURSE_MAC_SIZE * 2);
                 // Button pressed
                 goto out;
             }
         }
         // double the amount of collected data.
-        cmd_send(CMD_ACK, CMD_SIMULATE_TAG_ICLASS, i * 2, 0, mac_responses, i * EPURSE_MAC_SIZE * 2);
+        reply_old(CMD_ACK, CMD_SIMULATE_TAG_ICLASS, i * 2, 0, mac_responses, i * EPURSE_MAC_SIZE * 2);
 
     } else {
         // We may want a mode here where we hardcode the csns to use (from proxclone).
@@ -1395,7 +1395,7 @@ int doIClassSimulation(int simulationMode, uint8_t *reader_mac_buf) {
     // To control where we are in the protocol
     uint32_t time_0 = GetCountSspClk();
     uint32_t t2r_stime = 0, t2r_etime = 0;
-    uint32_t r2t_stime = 0, r2t_etime = 0;
+    uint32_t r2t_stime, r2t_etime = 0;
 
     LED_A_ON();
     bool buttonPressed = false;
@@ -1519,7 +1519,7 @@ int doIClassSimulation(int simulationMode, uint8_t *reader_mac_buf) {
 
                 if (simulationMode == MODE_EXIT_AFTER_MAC) {
 
-                    if (MF_DBGLEVEL ==  MF_DBG_EXTENDED) {
+                    if (DBGLEVEL ==  DBG_EXTENDED) {
                         Dbprintf("[+] CSN: %02x %02x %02x %02x %02x %02x %02x %02x", csn[0], csn[1], csn[2], csn[3], csn[4], csn[5], csn[6], csn[7]);
                         Dbprintf("[+] RDR:  (len=%02d): %02x %02x %02x %02x %02x %02x %02x %02x %02x", len,
                                  receivedCmd[0], receivedCmd[1], receivedCmd[2],
@@ -1584,7 +1584,7 @@ int doIClassSimulation(int simulationMode, uint8_t *reader_mac_buf) {
         } else {
             //#db# Unknown command received from reader (len=5): 26 1 0 f6 a 44 44 44 44
             // Never seen this command before
-            if (MF_DBGLEVEL ==  MF_DBG_EXTENDED)
+            if (DBGLEVEL ==  DBG_EXTENDED)
                 print_result("[-] Unhandled command received ", receivedCmd, len);
 
             // Do not respond
@@ -1626,7 +1626,7 @@ send:
  */
 static int SendIClassAnswer(uint8_t *resp, int respLen, uint16_t delay) {
     int i = 0;
-    volatile uint8_t b = 0;
+    volatile uint8_t b;
 
     FpgaWriteConfWord(FPGA_MAJOR_MODE_HF_SIMULATOR | FPGA_HF_SIMULATOR_MODULATE_424K_8BIT);
 
@@ -1720,7 +1720,6 @@ static void TransmitIClassCommand(const uint8_t *cmd, int len, int *samples, int
 //-----------------------------------------------------------------------------
 void CodeIClassCommand(const uint8_t *cmd, int len) {
     int i, j, k;
-    uint8_t b;
 
     ToSendReset();
 
@@ -1732,7 +1731,7 @@ void CodeIClassCommand(const uint8_t *cmd, int len) {
 
     // Modulate the bytes
     for (i = 0; i < len; i++) {
-        b = cmd[i];
+        uint8_t b = cmd[i];
         for (j = 0; j < 4; j++) {
             for (k = 0; k < 4; k++) {
 
@@ -1799,6 +1798,7 @@ static int GetIClassAnswer(uint8_t *receivedResponse, int maxLen, int *samples, 
 
     // clear RXRDY:
     uint8_t b = (uint8_t)AT91C_BASE_SSC->SSC_RHR;
+    (void)b;
 
     while (!BUTTON_PRESS()) {
         WDT_HIT();
@@ -1875,14 +1875,13 @@ void setupIclassReader() {
 }
 
 bool sendCmdGetResponseWithRetries(uint8_t *command, size_t cmdsize, uint8_t *resp, uint8_t expected_size, uint8_t retries) {
-    uint8_t got_n = 0;
     while (retries-- > 0) {
 
         ReaderTransmitIClass(command, cmdsize);
 
         //iceman - if received size is bigger than expected, we smash the stack here
         // since its called with fixed sized arrays
-        got_n = ReaderReceiveIClass(resp);
+        uint8_t got_n = ReaderReceiveIClass(resp);
 
         // 0xBB is the internal debug separator byte..
         if (expected_size != got_n || (resp[0] == 0xBB || resp[7] == 0xBB || resp[2] == 0xBB)) {
@@ -1983,9 +1982,7 @@ void ReaderIClass(uint8_t arg0) {
     //Read App Issuer Area block CRC(0x05) => 0xde  0x64
     uint8_t readAA[] = { ICLASS_CMD_READ_OR_IDENTIFY, 0x05, 0xde, 0x64};
 
-    int read_status = 0;
     uint16_t tryCnt = 0;
-    uint8_t result_status = 0;
 
     bool abort_after_read = arg0 & FLAG_ICLASS_READER_ONLY_ONCE;  // flag to read until one tag is found successfully
     bool try_once = arg0 & FLAG_ICLASS_READER_ONE_TRY;            // flag to not to loop continuously, looking for tag
@@ -1996,21 +1993,21 @@ void ReaderIClass(uint8_t arg0) {
 
     setupIclassReader();
 
-    bool userCancelled = BUTTON_PRESS() || usb_poll_validate_length();
+    bool userCancelled = BUTTON_PRESS() || data_available();
     while (!userCancelled) {
 
         WDT_HIT();
 
         // if only looking for one card try 2 times if we missed it the first time
         if (try_once && tryCnt > 2) {
-            if (MF_DBGLEVEL > 1) DbpString("Failed to find a tag");
+            if (DBGLEVEL > 1) DbpString("Failed to find a tag");
             break;
         }
 
         tryCnt++;
-        result_status = 0;
+        uint8_t result_status = 0;
 
-        read_status = handshakeIclassTag_ext(card_data, use_credit_key);
+        int read_status = handshakeIclassTag_ext(card_data, use_credit_key);
 
         if (read_status == 0) continue;
         if (read_status == 1) result_status = FLAG_ICLASS_READER_CSN;
@@ -2027,7 +2024,7 @@ void ReaderIClass(uint8_t arg0) {
                 result_status |= FLAG_ICLASS_READER_CONF;
                 memcpy(card_data + 8, resp, 8);
             } else {
-                if (MF_DBGLEVEL > 1) DbpString("Failed to dump config block");
+                if (DBGLEVEL > 1) DbpString("Failed to dump config block");
             }
         }
 
@@ -2037,7 +2034,7 @@ void ReaderIClass(uint8_t arg0) {
                 result_status |= FLAG_ICLASS_READER_AIA;
                 memcpy(card_data + (8 * 5), resp, 8);
             } else {
-                if (MF_DBGLEVEL > 1) DbpString("Failed to dump AA block");
+                if (DBGLEVEL > 1) DbpString("Failed to dump AA block");
             }
         }
 
@@ -2056,7 +2053,7 @@ void ReaderIClass(uint8_t arg0) {
         //  only useful if looping in arm (not try_once && not abort_after_read)
         if (memcmp(last_csn, card_data, 8) != 0) {
             // If caller requires that we get Conf, CC, AA, continue until we got it
-            if (MF_DBGLEVEL >= MF_DBG_EXTENDED) {
+            if (DBGLEVEL >= DBG_EXTENDED) {
                 Dbprintf("STATUS %02X | CSN %c | CONF %c | CC %c | AIA %c | ONCE %c | 1TRY %c",
                          result_status,
                          (result_status & FLAG_ICLASS_READER_CSN) ? 'Y' : 'N',
@@ -2082,10 +2079,10 @@ void ReaderIClass(uint8_t arg0) {
             if (flagReadConfig)
                 send |= (result_status & FLAG_ICLASS_READER_CONF);
 
-            if (MF_DBGLEVEL >= MF_DBG_EXTENDED) Dbprintf("SEND %c",  send ? 'y' : 'n');
+            if (DBGLEVEL >= DBG_EXTENDED) Dbprintf("SEND %c",  send ? 'y' : 'n');
 
             if (send) {
-                cmd_send(CMD_ACK, result_status, 0, 0, card_data, sizeof(card_data));
+                reply_old(CMD_ACK, result_status, 0, 0, card_data, sizeof(card_data));
                 if (abort_after_read) {
                     LED_B_OFF();
                     return;
@@ -2095,25 +2092,25 @@ void ReaderIClass(uint8_t arg0) {
             }
         }
         LED_B_OFF();
-        userCancelled = BUTTON_PRESS() || usb_poll_validate_length();
+        userCancelled = BUTTON_PRESS() || data_available();
     }
 
     if (userCancelled) {
-        cmd_send(CMD_ACK, 0xFF, 0, 0, card_data, 0);
+        reply_old(CMD_ACK, 0xFF, 0, 0, card_data, 0);
         switch_off();
     } else {
-        cmd_send(CMD_ACK, 0, 0, 0, card_data, 0);
+        reply_old(CMD_ACK, 0, 0, 0, card_data, 0);
     }
 }
 
 // turn off afterwards
-void ReaderIClass_Replay(uint8_t arg0, uint8_t *MAC) {
+void ReaderIClass_Replay(uint8_t arg0, uint8_t *mac) {
 
     uint8_t cardsize = 0;
     uint8_t mem = 0;
     uint8_t check[] = { 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     uint8_t read[]  = { 0x0c, 0x00, 0x00, 0x00 };
-    uint8_t card_data[USB_CMD_DATA_SIZE] = {0};
+    uint8_t card_data[PM3_CMD_DATA_SIZE] = {0};
     uint8_t resp[ICLASS_BUFFER_SIZE] = {0};
 
     static struct memory_t {
@@ -2134,7 +2131,7 @@ void ReaderIClass_Replay(uint8_t arg0, uint8_t *MAC) {
         if (read_status < 2) continue;
 
         //for now replay captured auth (as cc not updated)
-        memcpy(check + 5, MAC, 4);
+        memcpy(check + 5, mac, 4);
 
         if (!sendCmdGetResponseWithRetries(check, sizeof(check), resp, 4, 5)) {
             DbpString("Error: Authentication Fail!");
@@ -2161,7 +2158,7 @@ void ReaderIClass_Replay(uint8_t arg0, uint8_t *MAC) {
 
         WDT_HIT();
         //Set card_data to all zeroes, we'll fill it with data
-        memset(card_data, 0x0, USB_CMD_DATA_SIZE);
+        memset(card_data, 0x0, PM3_CMD_DATA_SIZE);
         uint8_t failedRead = 0;
         uint32_t stored_data_length = 0;
 
@@ -2181,15 +2178,15 @@ void ReaderIClass_Replay(uint8_t arg0, uint8_t *MAC) {
                 //Fill up the buffer
                 memcpy(card_data + stored_data_length, resp, 8);
                 stored_data_length += 8;
-                if (stored_data_length + 8 > USB_CMD_DATA_SIZE) {
+                if (stored_data_length + 8 > PM3_CMD_DATA_SIZE) {
                     //Time to send this off and start afresh
-                    cmd_send(CMD_ACK,
-                             stored_data_length,//data length
-                             failedRead,//Failed blocks?
-                             0,//Not used ATM
-                             card_data,
-                             stored_data_length
-                            );
+                    reply_old(CMD_ACK,
+                              stored_data_length,//data length
+                              failedRead,//Failed blocks?
+                              0,//Not used ATM
+                              card_data,
+                              stored_data_length
+                             );
                     //reset
                     stored_data_length = 0;
                     failedRead = 0;
@@ -2203,36 +2200,36 @@ void ReaderIClass_Replay(uint8_t arg0, uint8_t *MAC) {
 
         //Send off any remaining data
         if (stored_data_length > 0) {
-            cmd_send(CMD_ACK,
-                     stored_data_length,//data length
-                     failedRead,//Failed blocks?
-                     0,//Not used ATM
-                     card_data,
-                     stored_data_length
-                    );
+            reply_old(CMD_ACK,
+                      stored_data_length,//data length
+                      failedRead,//Failed blocks?
+                      0,//Not used ATM
+                      card_data,
+                      stored_data_length
+                     );
         }
         //If we got here, let's break
         break;
     }
     //Signal end of transmission
-    cmd_send(CMD_ACK,
-             0,//data length
-             0,//Failed blocks?
-             0,//Not used ATM
-             card_data,
-             0
-            );
+    reply_old(CMD_ACK,
+              0,//data length
+              0,//Failed blocks?
+              0,//Not used ATM
+              card_data,
+              0
+             );
     switch_off();
 }
 
 // not used. ?!? ( CMD_ICLASS_READCHECK)
 // turn off afterwards
-void iClass_ReadCheck(uint8_t blockNo, uint8_t keyType) {
-    uint8_t readcheck[] = { keyType, blockNo };
+void iClass_ReadCheck(uint8_t blockno, uint8_t keytype) {
+    uint8_t readcheck[] = { keytype, blockno };
     uint8_t resp[] = {0, 0, 0, 0, 0, 0, 0, 0};
     size_t isOK = 0;
     isOK = sendCmdGetResponseWithRetries(readcheck, sizeof(readcheck), resp, sizeof(resp), 6);
-    cmd_send(CMD_ACK, isOK, 0, 0, 0, 0);
+    reply_mix(CMD_ACK, isOK, 0, 0, 0, 0);
     switch_off();
 }
 
@@ -2251,7 +2248,7 @@ void iClass_Authentication(uint8_t *mac) {
 
     // 6 retries
     bool isOK = sendCmdGetResponseWithRetries(check, sizeof(check), resp, 4, 6);
-    cmd_send(CMD_ACK, isOK, 0, 0, 0, 0);
+    reply_mix(CMD_ACK, isOK, 0, 0, 0, 0);
 }
 
 typedef struct iclass_premac {
@@ -2293,7 +2290,7 @@ void iClass_Authentication_fast(uint64_t arg0, uint64_t arg1, uint8_t *datain) {
     uint8_t startup_limit = 10;
     while (read_status != 2) {
 
-        if (BUTTON_PRESS() && !usb_poll_validate_length()) goto out;
+        if (BUTTON_PRESS() && !data_available()) goto out;
 
         read_status = handshakeIclassTag_ext(card_data, use_credit_key);
         if (startup_limit-- == 0) {
@@ -2308,7 +2305,7 @@ void iClass_Authentication_fast(uint64_t arg0, uint64_t arg1, uint8_t *datain) {
     for (i = 0; i < keyCount; i++) {
 
         // Allow button press / usb cmd to interrupt device
-        if (BUTTON_PRESS() && !usb_poll_validate_length()) break;
+        if (BUTTON_PRESS() && !data_available()) break;
 
         WDT_HIT();
         LED_B_ON();
@@ -2335,7 +2332,7 @@ void iClass_Authentication_fast(uint64_t arg0, uint64_t arg1, uint8_t *datain) {
 
 out:
     // send keyindex.
-    cmd_send(CMD_ACK, isOK, i, 0, 0, 0);
+    reply_mix(CMD_ACK, isOK, i, 0, 0, 0);
 
     if (isOK >= 1 || lastChunk) {
         switch_off();
@@ -2348,9 +2345,9 @@ out:
 
 // Tries to read block.
 // retries 10times.
-bool iClass_ReadBlock(uint8_t blockNo, uint8_t *data, uint8_t len) {
+bool iClass_ReadBlock(uint8_t blockno, uint8_t *data, uint8_t len) {
     uint8_t resp[10];
-    uint8_t cmd[] = {ICLASS_CMD_READ_OR_IDENTIFY, blockNo, 0x00, 0x00};
+    uint8_t cmd[] = {ICLASS_CMD_READ_OR_IDENTIFY, blockno, 0x00, 0x00};
     AddCrc(cmd + 1, 1);
     // expect size 10,  retry 5times
     bool isOK = sendCmdGetResponseWithRetries(cmd, sizeof(cmd), resp, 10, 5);
@@ -2363,7 +2360,7 @@ bool iClass_ReadBlock(uint8_t blockNo, uint8_t *data, uint8_t len) {
 void iClass_ReadBlk(uint8_t blockno) {
     uint8_t data[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     bool isOK = iClass_ReadBlock(blockno, data, sizeof(data));
-    cmd_send(CMD_ACK, isOK, 0, 0, data, sizeof(data));
+    reply_mix(CMD_ACK, isOK, 0, 0, data, sizeof(data));
     switch_off();
 }
 
@@ -2397,15 +2394,15 @@ void iClass_Dump(uint8_t blockno, uint8_t numblks) {
         memcpy(dataout + (blkCnt * 8), blockdata, 8);
     }
     //return pointer to dump memory in arg3
-    cmd_send(CMD_ACK, isOK, blkCnt, BigBuf_max_traceLen(), 0, 0);
+    reply_mix(CMD_ACK, isOK, blkCnt, BigBuf_max_traceLen(), 0, 0);
     switch_off();
     BigBuf_free();
 }
 
-bool iClass_WriteBlock_ext(uint8_t blockNo, uint8_t *data) {
+bool iClass_WriteBlock_ext(uint8_t blockno, uint8_t *data) {
 
     uint8_t resp[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    uint8_t write[] = { ICLASS_CMD_UPDATE, blockNo, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    uint8_t write[] = { ICLASS_CMD_UPDATE, blockno, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     memcpy(write + 2, data, 12); // data + mac
     AddCrc(write + 1, 13);
 
@@ -2416,7 +2413,7 @@ bool iClass_WriteBlock_ext(uint8_t blockNo, uint8_t *data) {
         if (memcmp(write + 2, resp, 8)) {
 
             //if not programming key areas (note key blocks don't get programmed with actual key data it is xor data)
-            if (blockNo != 3 && blockNo != 4) {
+            if (blockno != 3 && blockno != 4) {
                 isOK = sendCmdGetResponseWithRetries(write, sizeof(write), resp, sizeof(resp), 5);
             }
         }
@@ -2425,9 +2422,9 @@ bool iClass_WriteBlock_ext(uint8_t blockNo, uint8_t *data) {
 }
 
 // turn off afterwards
-void iClass_WriteBlock(uint8_t blockNo, uint8_t *data) {
-    bool isOK = iClass_WriteBlock_ext(blockNo, data);
-    cmd_send(CMD_ACK, isOK, 0, 0, 0, 0);
+void iClass_WriteBlock(uint8_t blockno, uint8_t *data) {
+    bool isOK = iClass_WriteBlock_ext(blockno, data);
+    reply_mix(CMD_ACK, isOK, 0, 0, 0, 0);
     switch_off();
 }
 
@@ -2454,6 +2451,6 @@ void iClass_Clone(uint8_t startblock, uint8_t endblock, uint8_t *data) {
     else
         DbpString("Clone incomplete");
 
-    cmd_send(CMD_ACK, 1, 0, 0, 0, 0);
+    reply_mix(CMD_ACK, 1, 0, 0, 0, 0);
     switch_off();
 }

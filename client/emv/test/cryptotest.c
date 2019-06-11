@@ -94,10 +94,10 @@ int ExecuteCryptoTests(bool verbose) {
     res = roca_self_test();
     if (res) TestFail = true;
 
-    PrintAndLog("\n--------------------------");
+    PrintAndLogEx(NORMAL, "\n--------------------------");
 
     if (TestFail)
-        PrintAndLogEx(FAILED, "\tTest(s) [ %s ]", _RED_("FAIL"));
+        PrintAndLogEx(FAILED, "\tTest(s) [ %s ]", _RED_("Fail"));
     else
         PrintAndLogEx(SUCCESS, "\tTest(s) [ %s ]", _GREEN_("OK"));
 

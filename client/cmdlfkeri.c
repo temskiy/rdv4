@@ -11,7 +11,7 @@
 
 static int CmdHelp(const char *Cmd);
 
-int usage_lf_keri_clone(void) {
+static int usage_lf_keri_clone(void) {
     PrintAndLogEx(NORMAL, "clone a KERI tag to a T55x7 tag.");
     PrintAndLogEx(NORMAL, "Usage: lf keri clone [h] <id> <Q5>");
     PrintAndLogEx(NORMAL, "Options:");
@@ -21,10 +21,10 @@ int usage_lf_keri_clone(void) {
     PrintAndLogEx(NORMAL, "");
     PrintAndLogEx(NORMAL, "Examples:");
     PrintAndLogEx(NORMAL, "       lf keri clone 112233");
-    return 0;
+    return PM3_SUCCESS;
 }
 
-int usage_lf_keri_sim(void) {
+static int usage_lf_keri_sim(void) {
     PrintAndLogEx(NORMAL, "Enables simulation of KERI card with specified card number.");
     PrintAndLogEx(NORMAL, "Simulation runs until the button is pressed or another USB command is issued.");
     PrintAndLogEx(NORMAL, "");
@@ -35,39 +35,15 @@ int usage_lf_keri_sim(void) {
     PrintAndLogEx(NORMAL, "");
     PrintAndLogEx(NORMAL, "Examples:");
     PrintAndLogEx(NORMAL, "       lf keri sim 112233");
-    return 0;
+    return PM3_SUCCESS;
 }
 
-// find KERI preamble in already demoded data
-int detectKeri(uint8_t *dest, size_t *size, bool *invert) {
+static int CmdKeriDemod(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
 
-    uint8_t preamble[] = {1,1,1,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
-    uint8_t preamble_i[] = {0,0,0,1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0};
-
-    // sanity check.
-    if (*size < sizeof(preamble) + 100) return -1;
-
-    size_t startIdx = 0;
-
-    if (!preambleSearch(dest, preamble, sizeof(preamble), size, &startIdx)) {
-
-        // if didn't find preamble try again inverting
-        if (!preambleSearch(DemodBuffer, preamble_i, sizeof(preamble_i), size, &startIdx))
-            return -2;
-
-        *invert ^= 1;
-    }
-
-    if (*size != 64) return -3; //wrong demoded size
-
-    return (int)startIdx;
-}
-
-int CmdKeriDemod(const char *Cmd) {
-
-    if (!PSKDemod("", false)) {
+    if (PSKDemod("", false) != PM3_SUCCESS) {
         PrintAndLogEx(DEBUG, "DEBUG: Error - KERI: PSK1 Demod failed");
-        return 0;
+        return PM3_ESOFT;
     }
     bool invert = false;
     size_t size = DemodBufferLen;
@@ -82,9 +58,9 @@ int CmdKeriDemod(const char *Cmd) {
         else
             PrintAndLogEx(DEBUG, "DEBUG: Error - KERI: ans: %d", idx);
 
-        return 0;
+        return PM3_ESOFT;
     }
-    setDemodBuf(DemodBuffer, size, idx);
+    setDemodBuff(DemodBuffer, size, idx);
     setClockGrid(g_DemodClock, g_DemodStartIdx + (idx * g_DemodClock));
 
     //got a good demod
@@ -119,15 +95,15 @@ int CmdKeriDemod(const char *Cmd) {
 
         CmdPrintDemodBuff("x");
     }
-    return 1;
+    return PM3_SUCCESS;
 }
 
-int CmdKeriRead(const char *Cmd) {
+static int CmdKeriRead(const char *Cmd) {
     lf_read(true, 10000);
     return CmdKeriDemod(Cmd);
 }
 
-int CmdKeriClone(const char *Cmd) {
+static int CmdKeriClone(const char *Cmd) {
 
     uint32_t internalid = 0;
     uint32_t blocks[3] = {
@@ -159,84 +135,130 @@ int CmdKeriClone(const char *Cmd) {
 
     // MSB is ONE
     internalid |= 0x80000000;
-    
+
     // 3 LSB is ONE
     uint64_t data = ((uint64_t)internalid << 3) + 7;
-    PrintAndLogEx(INFO, "Preparing to clone KERI to T55x7 with Internal Id: %" PRIx64, internalid );
+    PrintAndLogEx(INFO, "Preparing to clone KERI to T55x7 with Internal Id: %" PRIx64, internalid);
 
     //
     blocks[1] = data >> 32;
     blocks[2] = data & 0xFFFFFFFF;
     print_blocks(blocks, 3);
 
+    PacketResponseNG resp;
 
-    UsbCommand resp;
-    UsbCommand c = {CMD_T55XX_WRITE_BLOCK, {0, 0, 0}};
-
-
+    // fast push mode
+    conn.block_after_ACK = true;
     for (uint8_t i = 0; i < 3; i++) {
-        c.arg[0] = blocks[i];
-        c.arg[1] = i;
+        if (i == 2) {
+            // Disable fast mode on last packet
+            conn.block_after_ACK = false;
+        }
         clearCommandBuffer();
-        SendCommand(&c);
-        if (!WaitForResponseTimeout(CMD_ACK, &resp, T55XX_WRITE_TIMEOUT)) {
+
+        t55xx_write_block_t ng;
+        ng.data = blocks[i];
+        ng.pwd = 0;
+        ng.blockno = i;
+        ng.flags = 0;
+
+        SendCommandNG(CMD_T55XX_WRITE_BLOCK, (uint8_t *)&ng, sizeof(ng));
+        if (!WaitForResponseTimeout(CMD_T55XX_WRITE_BLOCK, &resp, T55XX_WRITE_TIMEOUT)) {
             PrintAndLogEx(WARNING, "Error occurred, device did not respond during write operation.");
-            return -1;
+            return PM3_ETIMEOUT;
         }
     }
 
-    return 0;
+    return PM3_SUCCESS;
 }
 
-int CmdKeriSim(const char *Cmd) {
+static int CmdKeriSim(const char *Cmd) {
 
     char cmdp = tolower(param_getchar(Cmd, 0));
-    if (strlen(Cmd) == 0 || cmdp == 'h') return usage_lf_keri_sim();
+    if (strlen(Cmd) == 0 || cmdp == 'h')
+        return usage_lf_keri_sim();
 
     uint64_t internalid = param_get32ex(Cmd, 0, 0, 10);
     internalid |= 0x80000000;
     internalid <<= 3;
     internalid += 7;
 
-    uint8_t bits[64] = {0x00};
+    uint8_t bs[64] = {0x00};
     // loop to bits
     uint8_t j = 0;
     for (int8_t i = 63; i >= 0; --i) {
-        bits[j++] = ((internalid >> i) & 1);
+        bs[j++] = ((internalid >> i) & 1);
     }
-
-    uint8_t clk = 32, carrier = 2, invert = 0;
-    uint16_t arg1, arg2;
-    size_t size = 64;
-    arg1 = clk << 8 | carrier;
-    arg2 = invert;
 
     PrintAndLogEx(SUCCESS, "Simulating KERI - Internal Id: %u", internalid);
 
-    UsbCommand c = {CMD_PSK_SIM_TAG, {arg1, arg2, size}};
-    memcpy(c.d.asBytes, bits, size);
-    clearCommandBuffer();
-    SendCommand(&c);
+    lf_psksim_t *payload = calloc(1, sizeof(lf_psksim_t) + sizeof(bs));
+    payload->carrier =  2;
+    payload->invert = 0;
+    payload->clock = 32;
+    memcpy(payload->data, bs, sizeof(bs));
 
-    return 0;
+    PrintAndLogEx(INFO, "Simulating");
+
+    clearCommandBuffer();
+    SendCommandNG(CMD_PSK_SIM_TAG, (uint8_t *)payload,  sizeof(lf_psksim_t) + sizeof(bs));
+    free(payload);
+
+    PacketResponseNG resp;
+    WaitForResponse(CMD_PSK_SIM_TAG, &resp);
+
+    PrintAndLogEx(INFO, "Done");
+    if (resp.status != PM3_EOPABORTED)
+        return resp.status;
+    return PM3_SUCCESS;
 }
 
 static command_t CommandTable[] = {
-    {"help",  CmdHelp,      1, "This help"},
-    {"demod", CmdKeriDemod, 1, "Demodulate an KERI tag from the GraphBuffer"},
-    {"read",  CmdKeriRead,  0, "Attempt to read and extract tag data from the antenna"},
-    {"clone", CmdKeriClone, 0, "clone KERI to T55x7"},
-    {"sim",   CmdKeriSim,   0, "simulate KERI tag"},
-    {NULL, NULL, 0, NULL}
+    {"help",  CmdHelp,      AlwaysAvailable, "This help"},
+    {"demod", CmdKeriDemod, AlwaysAvailable, "Demodulate an KERI tag from the GraphBuffer"},
+    {"read",  CmdKeriRead,  IfPm3Lf,         "Attempt to read and extract tag data from the antenna"},
+    {"clone", CmdKeriClone, IfPm3Lf,         "clone KERI to T55x7"},
+    {"sim",   CmdKeriSim,   IfPm3Lf,         "simulate KERI tag"},
+    {NULL, NULL, NULL, NULL}
 };
+
+static int CmdHelp(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
+    CmdsHelp(CommandTable);
+    return PM3_SUCCESS;
+}
 
 int CmdLFKeri(const char *Cmd) {
     clearCommandBuffer();
-    CmdsParse(CommandTable, Cmd);
-    return 0;
+    return CmdsParse(CommandTable, Cmd);
 }
 
-int CmdHelp(const char *Cmd) {
-    CmdsHelp(CommandTable);
-    return 0;
+// find KERI preamble in already demoded data
+int detectKeri(uint8_t *dest, size_t *size, bool *invert) {
+
+    uint8_t preamble[] = {1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
+    uint8_t preamble_i[] = {0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0};
+
+    // sanity check.
+    if (*size < sizeof(preamble) + 100) return -1;
+
+    size_t startIdx = 0;
+
+    if (!preambleSearch(dest, preamble, sizeof(preamble), size, &startIdx)) {
+
+        // if didn't find preamble try again inverting
+        if (!preambleSearch(DemodBuffer, preamble_i, sizeof(preamble_i), size, &startIdx))
+            return -2;
+
+        *invert ^= 1;
+    }
+
+    if (*size != 64) return -3; //wrong demoded size
+
+    return (int)startIdx;
 }
+
+int demodKeri(void) {
+    return CmdKeriDemod("");
+}
+

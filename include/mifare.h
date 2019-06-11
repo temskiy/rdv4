@@ -20,6 +20,23 @@
 #define MF_MAD2_SECTOR 0x10
 
 //-----------------------------------------------------------------------------
+// Common types, used by client and ARM
+//-----------------------------------------------------------------------------
+// New Ultralight/NTAG dump file format
+// Length must be aligned to 4 bytes (UL/NTAG page)
+#define MFU_DUMP_PREFIX_LENGTH 56
+
+typedef struct {
+    uint8_t version[8];
+    uint8_t tbo[2];
+    uint8_t tbo1[1];
+    uint8_t pages;                  // max page number in dump
+    uint8_t signature[32];
+    uint8_t counter_tearing[3][4];  // 3 bytes counter, 1 byte tearing flag
+    uint8_t data[1024];
+} mfu_dump_t;
+
+//-----------------------------------------------------------------------------
 // ISO 14443A
 //-----------------------------------------------------------------------------
 typedef struct {
@@ -47,10 +64,11 @@ typedef enum ISO14A_COMMAND {
 
 typedef struct {
     uint8_t *response;
-    size_t   response_n;
     uint8_t *modulation;
-    size_t   modulation_n;
+    uint16_t response_n;
+    uint16_t modulation_n;
     uint32_t ProxToAirDuration;
+    uint8_t  par; // enough for precalculated parity of 8 Byte responses
 } tag_response_info_t;
 //-----------------------------------------------------------------------------
 // ISO 14443B

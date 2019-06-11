@@ -52,7 +52,7 @@ void EraseMemory() {
     Flash_WriteEnable();
     Flash_Erase4k(0, 0);
 
-    if (MF_DBGLEVEL > 1) Dbprintf("[!] Erased flash!");
+    if (DBGLEVEL > 1) Dbprintf("[!] Erased flash!");
     FlashStop();
     SpinDelay(100);
 }
@@ -85,7 +85,7 @@ void RAMFUNC SniffAndStore(uint8_t param) {
     uint8_t *data = dmaBuf;
 
     uint8_t previous_data = 0;
-    int dataLen = 0;
+    int dataLen;
     bool TagIsActive = false;
     bool ReaderIsActive = false;
 
@@ -97,7 +97,7 @@ void RAMFUNC SniffAndStore(uint8_t param) {
 
     // Setup and start DMA.
     if (!FpgaSetupSscDma((uint8_t *) dmaBuf, DMA_BUFFER_SIZE)) {
-        if (MF_DBGLEVEL > 1) Dbprintf("FpgaSetupSscDma failed. Exiting");
+        if (DBGLEVEL > 1) Dbprintf("FpgaSetupSscDma failed. Exiting");
         return;
     }
 
@@ -110,7 +110,7 @@ void RAMFUNC SniffAndStore(uint8_t param) {
     // triggered == false -- to wait first for card
     bool triggered = !(param & 0x03);
 
-    uint32_t rsamples = 0;
+    uint32_t my_rsamples = 0;
 
     // Current captured passwords counter
     uint8_t auth_attempts = 0;
@@ -151,11 +151,11 @@ void RAMFUNC SniffAndStore(uint8_t param) {
         LED_A_OFF();
 
         // Need two samples to feed Miller and Manchester-Decoder
-        if (rsamples & 0x01) {
+        if (my_rsamples & 0x01) {
 
             if (!TagIsActive) { // no need to try decoding reader data if the tag is sending
                 uint8_t readerdata = (previous_data & 0xF0) | (*data >> 4);
-                if (MillerDecoding(readerdata, (rsamples - 1) * 4)) {
+                if (MillerDecoding(readerdata, (my_rsamples - 1) * 4)) {
                     LED_C_ON();
 
                     // check - if there is a short 7bit request from reader
@@ -163,7 +163,7 @@ void RAMFUNC SniffAndStore(uint8_t param) {
 
                     if (triggered) {
                         if ((receivedCmd) && ((receivedCmd[0] == MIFARE_ULEV1_AUTH) || (receivedCmd[0] == MIFARE_ULC_AUTH_1))) {
-                            if (MF_DBGLEVEL > 1) Dbprintf("PWD-AUTH KEY: 0x%02x%02x%02x%02x", receivedCmd[1], receivedCmd[2], receivedCmd[3], receivedCmd[4]);
+                            if (DBGLEVEL > 1) Dbprintf("PWD-AUTH KEY: 0x%02x%02x%02x%02x", receivedCmd[1], receivedCmd[2], receivedCmd[3], receivedCmd[4]);
 
                             // temporarily save the captured pwd in our array
                             memcpy(&capturedPwds[4 * auth_attempts], receivedCmd + 1, 4);
@@ -190,7 +190,7 @@ void RAMFUNC SniffAndStore(uint8_t param) {
             // no need to try decoding tag data if the reader is sending - and we cannot afford the time
             if (!ReaderIsActive) {
                 uint8_t tagdata = (previous_data << 4) | (*data & 0x0F);
-                if (ManchesterDecoding(tagdata, 0, (rsamples - 1) * 4)) {
+                if (ManchesterDecoding(tagdata, 0, (my_rsamples - 1) * 4)) {
                     LED_B_ON();
 
                     if (!LogTrace(receivedResp,
@@ -214,7 +214,7 @@ void RAMFUNC SniffAndStore(uint8_t param) {
         }
 
         previous_data = *data;
-        rsamples++;
+        my_rsamples++;
         data++;
         if (data == dmaBuf + DMA_BUFFER_SIZE) {
             data = dmaBuf;
@@ -230,26 +230,26 @@ void RAMFUNC SniffAndStore(uint8_t param) {
 
     // Write stuff to flash
     if (auth_attempts > 0) {
-        if (MF_DBGLEVEL > 1) Dbprintf("[!] Authentication attempts = %u", auth_attempts);
+        if (DBGLEVEL > 1) Dbprintf("[!] Authentication attempts = %u", auth_attempts);
 
         // Setting the SPI Baudrate to 48MHz to avoid the bit-flip issue (https://github.com/RfidResearchGroup/proxmark3/issues/34)
         FlashmemSetSpiBaudrate(48000000);
 
         // Find the offset in flash mem to continue writing the auth attempts
         uint8_t memoffset = FindOffsetInFlash();
-        if (MF_DBGLEVEL > 1) Dbprintf("[!] Memory offset = %u", memoffset);
+        if (DBGLEVEL > 1) Dbprintf("[!] Memory offset = %u", memoffset);
 
         if ((memoffset + 4 * auth_attempts) > 0xFF) {
             // We opt to keep the new data only
             memoffset = 0;
-            if (MF_DBGLEVEL > 1) Dbprintf("[!] Size of total data > 256 bytes. Discarding the old data.");
+            if (DBGLEVEL > 1) Dbprintf("[!] Size of total data > 256 bytes. Discarding the old data.");
         }
 
         // Get previous data from flash mem
         uint8_t *previousdata = BigBuf_malloc(memoffset);
         if (memoffset > 0) {
             uint16_t readlen = Flash_ReadData(0, previousdata, memoffset);
-            if (MF_DBGLEVEL > 1) Dbprintf("[!] Read %u bytes from flash mem", readlen);
+            if (DBGLEVEL > 1) Dbprintf("[!] Read %u bytes from flash mem", readlen);
         }
 
         // create new bigbuf to hold all data
@@ -267,7 +267,7 @@ void RAMFUNC SniffAndStore(uint8_t param) {
 
         // Write total data to flash mem
         uint16_t writelen = Flash_WriteData(0, total_data, memoffset + 4 * auth_attempts);
-        if (MF_DBGLEVEL > 1) Dbprintf("[!] Wrote %u bytes into flash mem", writelen);
+        if (DBGLEVEL > 1) Dbprintf("[!] Wrote %u bytes into flash mem", writelen);
 
         // If pwd saved successfully, blink led A three times
         if (writelen > 0) {
@@ -279,6 +279,10 @@ void RAMFUNC SniffAndStore(uint8_t param) {
         // Reset the SPI Baudrate to the default value (24MHz)
         FlashmemSetSpiBaudrate(24000000);
     }
+}
+
+void ModInfo(void) {
+    DbpString("   HF 14a sniff standalone with ULC/ULEV1/NTAG auth storing in flashmem - aka BogitoRun (Bogito)");
 }
 
 void RunMod() {

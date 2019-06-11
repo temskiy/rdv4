@@ -27,14 +27,7 @@
 #include "comms.h"              // for sending cmds to device. GetFromBigBuf
 #include "loclass/fileutils.h"  // for saveFile
 
-extern int CmdTrace(const char *Cmd);
+int CmdTrace(const char *Cmd);
+int CmdTraceList(const char *Cmd);
 
-extern int CmdTraceList(const char *Cmd);
-extern int CmdTraceLoad(const char *Cmd);
-extern int CmdTraceSave(const char *Cmd);
-
-// usages helptext
-extern int usage_trace_list(void);
-extern int usage_trace_load(void);
-extern int usage_trace_save(void);
 #endif

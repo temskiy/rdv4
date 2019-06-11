@@ -1,14 +1,13 @@
-// (‑●‑●)> released under the WTFPL v2 license, by Gregory Pakosz (@gpakosz)
+// (‑●‑●)> dual licensed under the WTFPL v2 and MIT licenses
+//   without any warranty.
+//   by Gregory Pakosz (@gpakosz)
 // https://github.com/gpakosz/whereami
-
-// in case you want to #include "whereami.c" in a larger compilation unit
-#if !defined(WHEREAMI_H)
-#include <whereami.h>
-#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include <whereami.h>
 
 #if defined(__linux__)
 // make realpath() available:
@@ -287,11 +286,9 @@ int WAI_PREFIX(getModulePath)(char *out, int capacity, int *dirname_length) {
                         memcpy(out, resolved, length);
 
                         if (dirname_length) {
-                            int i;
-
-                            for (i = length - 1; i >= 0; --i) {
-                                if (out[i] == '/') {
-                                    *dirname_length = i;
+                            for (int j = length - 1; j >= 0; --j) {
+                                if (out[j] == '/') {
+                                    *dirname_length = j;
                                     break;
                                 }
                             }

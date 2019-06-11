@@ -48,8 +48,39 @@ typedef struct {
     COMMTIMEOUTS ct;  // Serial port time-out configuration
 } serial_port_windows;
 
-serial_port uart_open(const char *pcPortName) {
-    char acPortName[255];
+uint32_t newtimeout_value = 0;
+bool newtimeout_pending = false;
+
+int uart_reconfigure_timeouts(uint32_t value) {
+    newtimeout_value = value;
+    newtimeout_pending = true;
+    return PM3_SUCCESS;
+}
+
+static int uart_reconfigure_timeouts_polling(serial_port sp) {
+    if (newtimeout_pending == false)
+        return PM3_SUCCESS;
+    newtimeout_pending = false;
+
+    serial_port_windows *spw;
+    spw = (serial_port_windows *)sp;
+    spw->ct.ReadIntervalTimeout         = newtimeout_value;
+    spw->ct.ReadTotalTimeoutMultiplier  = 0;
+    spw->ct.ReadTotalTimeoutConstant    = newtimeout_value;
+    spw->ct.WriteTotalTimeoutMultiplier = newtimeout_value;
+    spw->ct.WriteTotalTimeoutConstant   = 0;
+
+    if (!SetCommTimeouts(spw->hPort, &spw->ct)) {
+        uart_close(spw);
+        return PM3_EIO;
+    }
+
+    PurgeComm(spw->hPort, PURGE_RXABORT | PURGE_RXCLEAR);
+    return PM3_SUCCESS;
+}
+
+serial_port uart_open(const char *pcPortName, uint32_t speed) {
+    char acPortName[255] = {0};
     serial_port_windows *sp = calloc(sizeof(serial_port_windows), sizeof(uint8_t));
 
     if (sp == 0) {
@@ -84,46 +115,20 @@ serial_port uart_open(const char *pcPortName) {
         printf("[!] UART error while setting com state\n");
         return INVALID_SERIAL_PORT;
     }
-    // all zero's configure: no timeout for read/write used.
-    // took settings from libnfc/buses/uart.c
-#ifdef WITH_FPC
-    sp->ct.ReadIntervalTimeout         = 1000;
-    sp->ct.ReadTotalTimeoutMultiplier  = 0;
-    sp->ct.ReadTotalTimeoutConstant    = 1500;
-    sp->ct.WriteTotalTimeoutMultiplier = 1000;
-    sp->ct.WriteTotalTimeoutConstant   = 0;
-#else
-    sp->ct.ReadIntervalTimeout         = 30;
-    sp->ct.ReadTotalTimeoutMultiplier  = 0;
-    sp->ct.ReadTotalTimeoutConstant    = 30;
-    sp->ct.WriteTotalTimeoutMultiplier = 30;
-    sp->ct.WriteTotalTimeoutConstant   = 0;
-#endif
 
-    if (!SetCommTimeouts(sp->hPort, &sp->ct)) {
-        uart_close(sp);
-        printf("[!] UART error while setting comm time outs\n");
-        return INVALID_SERIAL_PORT;
-    }
+    uart_reconfigure_timeouts(UART_FPC_CLIENT_RX_TIMEOUT_MS);
+    uart_reconfigure_timeouts_polling(sp);
 
-    PurgeComm(sp->hPort, PURGE_RXABORT | PURGE_RXCLEAR);
-
-#ifdef WITH_FPC
-    if (uart_set_speed(sp, 115200)) {
-        printf("[=] UART Setting serial baudrate 115200 [FPC enabled]\n");
-    } else {
-        uart_set_speed(sp, 9600);
-        printf("[=] UART Setting serial baudrate 9600 [FPC enabled]\n");
+    if (!uart_set_speed(sp, speed)) {
+        // try fallback automatically
+        speed = 115200;
+        if (!uart_set_speed(sp, speed)) {
+            uart_close(sp);
+            printf("[!] UART error while setting baudrate\n");
+            return INVALID_SERIAL_PORT;
+        }
     }
-#else
-    bool success = uart_set_speed(sp, 460800);
-    if (success) {
-        printf("[=] UART Setting serial baudrate 460800\n");
-    } else {
-        uart_set_speed(sp, 115200);
-        printf("[=] UART Setting serial baudrate 115200\n");
-    }
-#endif
+    conn.uart_speed = uart_get_speed(sp);
     return sp;
 }
 
@@ -145,6 +150,8 @@ bool uart_set_speed(serial_port sp, const uint32_t uiPortSpeed) {
         case 115200:
         case 230400:
         case 460800:
+        case 921600:
+        case 1382400:
             break;
         default:
             return false;
@@ -154,6 +161,9 @@ bool uart_set_speed(serial_port sp, const uint32_t uiPortSpeed) {
     spw->dcb.BaudRate = uiPortSpeed;
     bool result = SetCommState(spw->hPort, &spw->dcb);
     PurgeComm(spw->hPort, PURGE_RXABORT | PURGE_RXCLEAR);
+    if (result)
+        conn.uart_speed = uiPortSpeed;
+
     return result;
 }
 
@@ -165,13 +175,32 @@ uint32_t uart_get_speed(const serial_port sp) {
     return 0;
 }
 
-bool uart_receive(const serial_port sp, uint8_t *p_rx, size_t pszMaxRxLen, size_t *len) {
-    return ReadFile(((serial_port_windows *)sp)->hPort, p_rx, pszMaxRxLen, (LPDWORD)len, NULL);
+int uart_receive(const serial_port sp, uint8_t *pbtRx, uint32_t pszMaxRxLen, uint32_t *pszRxLen) {
+    uart_reconfigure_timeouts_polling(sp);
+    int res = ReadFile(((serial_port_windows *)sp)->hPort, pbtRx, pszMaxRxLen, (LPDWORD)pszRxLen, NULL);
+    if (res)
+        return PM3_SUCCESS;
+
+    int errorcode = GetLastError();
+
+    if (res == 0 && errorcode == 2) {
+        return PM3_EIO;
+    }
+
+    return PM3_ENOTTY;
 }
 
-bool uart_send(const serial_port sp, const uint8_t *p_tx, const size_t len) {
+int uart_send(const serial_port sp, const uint8_t *p_tx, const uint32_t len) {
     DWORD txlen = 0;
-    return WriteFile(((serial_port_windows *)sp)->hPort, p_tx, len, &txlen, NULL);
+    int res = WriteFile(((serial_port_windows *)sp)->hPort, p_tx, len, &txlen, NULL);
+    if (res)
+        return PM3_SUCCESS;
+
+    int errorcode = GetLastError();
+    if (res == 0 && errorcode == 2) {
+        return PM3_EIO;
+    }
+    return PM3_ENOTTY;
 }
 
 #endif

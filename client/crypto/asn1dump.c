@@ -25,7 +25,7 @@
 #include "proxmark3.h"
 
 #ifndef PRINT_INDENT
-# define PRINT_INDENT(level) {for (int i = 0; i < (level); i++) fprintf(f, "   ");}
+# define PRINT_INDENT(level) {for (int myi = 0; myi < (level); myi++) fprintf(f, "   ");}
 #endif
 
 enum asn1_tag_t {
@@ -41,50 +41,50 @@ enum asn1_tag_t {
 
 struct asn1_tag {
     tlv_tag_t tag;
-    char *name;
+    const char *name;
     enum asn1_tag_t type;
-    const void *data;
+//    const void *data;
 };
 
 static const struct asn1_tag asn1_tags[] = {
     // internal
-    { 0x00, "Unknown ???" },
+    { 0x00, "Unknown ???",       ASN1_TAG_GENERIC      },
 
     // ASN.1
-    { 0x01, "BOOLEAN", ASN1_TAG_BOOLEAN },
-    { 0x02, "INTEGER", ASN1_TAG_INTEGER },
-    { 0x03, "BIT STRING" },
-    { 0x04, "OCTET STRING", ASN1_TAG_OCTET_STRING},
-    { 0x05, "NULL" },
-    { 0x06, "OBJECT IDENTIFIER", ASN1_TAG_OBJECT_ID },
-    { 0x07, "OBJECT DESCRIPTOR" },
-    { 0x08, "EXTERNAL" },
-    { 0x09, "REAL" },
-    { 0x0A, "ENUMERATED" },
-    { 0x0B, "EMBEDDED_PDV" },
-    { 0x0C, "UTF8String", ASN1_TAG_STRING },
-    { 0x10, "SEQUENCE" },
-    { 0x11, "SET" },
-    { 0x12, "NumericString", ASN1_TAG_STRING },
-    { 0x13, "PrintableString", ASN1_TAG_STRING },
-    { 0x14, "T61String" },
-    { 0x15, "VideotexString" },
-    { 0x16, "IA5String" },
-    { 0x17, "UTCTime", ASN1_TAG_UTC_TIME },
-    { 0x18, "GeneralizedTime", ASN1_TAG_STR_TIME },
-    { 0x19, "GraphicString" },
-    { 0x1A, "VisibleString", ASN1_TAG_STRING },
-    { 0x1B, "GeneralString", ASN1_TAG_STRING },
-    { 0x1C, "UniversalString", ASN1_TAG_STRING },
-    { 0x1E, "BMPString" },
-    { 0x30, "SEQUENCE" },
-    { 0x31, "SET" },
-    { 0xa0, "[0]" },
-    { 0xa1, "[1]" },
-    { 0xa2, "[2]" },
-    { 0xa3, "[3]" },
-    { 0xa4, "[4]" },
-    { 0xa5, "[5]" },
+    { 0x01, "BOOLEAN",           ASN1_TAG_BOOLEAN      },
+    { 0x02, "INTEGER",           ASN1_TAG_INTEGER      },
+    { 0x03, "BIT STRING",        ASN1_TAG_GENERIC      },
+    { 0x04, "OCTET STRING",      ASN1_TAG_OCTET_STRING },
+    { 0x05, "NULL",              ASN1_TAG_GENERIC      },
+    { 0x06, "OBJECT IDENTIFIER", ASN1_TAG_OBJECT_ID    },
+    { 0x07, "OBJECT DESCRIPTOR", ASN1_TAG_GENERIC      },
+    { 0x08, "EXTERNAL",          ASN1_TAG_GENERIC      },
+    { 0x09, "REAL",              ASN1_TAG_GENERIC      },
+    { 0x0A, "ENUMERATED",        ASN1_TAG_GENERIC      },
+    { 0x0B, "EMBEDDED_PDV",      ASN1_TAG_GENERIC      },
+    { 0x0C, "UTF8String",        ASN1_TAG_STRING       },
+    { 0x10, "SEQUENCE",          ASN1_TAG_GENERIC      },
+    { 0x11, "SET",               ASN1_TAG_GENERIC      },
+    { 0x12, "NumericString",     ASN1_TAG_STRING       },
+    { 0x13, "PrintableString",   ASN1_TAG_STRING       },
+    { 0x14, "T61String",         ASN1_TAG_GENERIC      },
+    { 0x15, "VideotexString",    ASN1_TAG_GENERIC      },
+    { 0x16, "IA5String",         ASN1_TAG_GENERIC      },
+    { 0x17, "UTCTime",           ASN1_TAG_UTC_TIME     },
+    { 0x18, "GeneralizedTime",   ASN1_TAG_STR_TIME     },
+    { 0x19, "GraphicString",     ASN1_TAG_GENERIC      },
+    { 0x1A, "VisibleString",     ASN1_TAG_STRING       },
+    { 0x1B, "GeneralString",     ASN1_TAG_STRING       },
+    { 0x1C, "UniversalString",   ASN1_TAG_STRING       },
+    { 0x1E, "BMPString",         ASN1_TAG_GENERIC      },
+    { 0x30, "SEQUENCE",          ASN1_TAG_GENERIC      },
+    { 0x31, "SET",               ASN1_TAG_GENERIC      },
+    { 0xa0, "[0]",               ASN1_TAG_GENERIC      },
+    { 0xa1, "[1]",               ASN1_TAG_GENERIC      },
+    { 0xa2, "[2]",               ASN1_TAG_GENERIC      },
+    { 0xa3, "[3]",               ASN1_TAG_GENERIC      },
+    { 0xa4, "[4]",               ASN1_TAG_GENERIC      },
+    { 0xa5, "[5]",               ASN1_TAG_GENERIC      },
 };
 
 static int asn1_sort_tag(tlv_tag_t tag) {
@@ -99,7 +99,7 @@ static int asn1_tlv_compare(const void *a, const void *b) {
 }
 
 static const struct asn1_tag *asn1_get_tag(const struct tlv *tlv) {
-    struct asn1_tag *tag = bsearch(tlv, asn1_tags, sizeof(asn1_tags) / sizeof(asn1_tags[0]),
+    struct asn1_tag *tag = bsearch(tlv, asn1_tags, ARRAYLEN(asn1_tags),
                                    sizeof(asn1_tags[0]), asn1_tlv_compare);
 
     return tag ? tag : &asn1_tags[0];
@@ -165,7 +165,7 @@ static void asn1_tag_dump_string(const struct tlv *tlv, const struct asn1_tag *t
 
 static void asn1_tag_dump_octet_string(const struct tlv *tlv, const struct asn1_tag *tag, FILE *f, int level, bool *needdump) {
     *needdump = false;
-    for (int i = 0; i < tlv->len; i++)
+    for (size_t i = 0; i < tlv->len; i++)
         if (!isspace(tlv->value[i]) && !isprint(tlv->value[i])) {
             *needdump = true;
             break;
@@ -181,7 +181,7 @@ static void asn1_tag_dump_octet_string(const struct tlv *tlv, const struct asn1_
 
 static unsigned long asn1_value_integer(const struct tlv *tlv, unsigned start, unsigned end) {
     unsigned long ret = 0;
-    int i;
+    unsigned i;
 
     if (end > tlv->len * 2)
         return ret;
@@ -222,7 +222,7 @@ static void asn1_tag_dump_integer(const struct tlv *tlv, const struct asn1_tag *
     PRINT_INDENT(level);
     if (tlv->len == 4) {
         int32_t val = 0;
-        for (int i = 0; i < tlv->len; i++)
+        for (size_t i = 0; i < tlv->len; i++)
             val = (val << 8) + tlv->value[i];
         fprintf(f, "\tvalue4b: %d\n", val);
         return;
@@ -238,7 +238,7 @@ static char *asn1_oid_description(const char *oid, bool with_group_desc) {
     memset(res, 0x00, sizeof(res));
 
     size_t len = strlen(get_my_executable_directory());
-    if (len > 300) len = 299;
+    if (len >= 300) len = 299;
 
     strncpy(fname, get_my_executable_directory(), len);
     strcat(fname, "crypto/oids.json");
@@ -323,7 +323,7 @@ bool asn1_tag_dump(const struct tlv *tlv, FILE *f, int level, bool *candump) {
     const struct asn1_tag *tag = asn1_get_tag(tlv);
 
     PRINT_INDENT(level);
-    fprintf(f, "--%2hx[%02zx] '%s':", tlv->tag, tlv->len, tag->name);
+    fprintf(f, "--%2x[%02zx] '%s':", tlv->tag, tlv->len, tag->name);
 
     switch (tag->type) {
         case ASN1_TAG_GENERIC:

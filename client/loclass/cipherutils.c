@@ -104,10 +104,11 @@ int bitsLeft(BitstreamIn *stream) {
  * @param stream
  * @return Number of bits stored in stream
  */
-int numBits(BitstreamOut *stream) {
+/*
+static int numBits(BitstreamOut *stream) {
     return stream->numbits;
 }
-
+*/
 void x_num_to_bytes(uint64_t n, size_t len, uint8_t *dest) {
     while (len--) {
         dest[len] = (uint8_t) n;
@@ -142,7 +143,7 @@ void reverse_arraycopy(uint8_t *arr, uint8_t *dest, size_t len) {
     }
 }
 
-void printarr(char *name, uint8_t *arr, int len) {
+void printarr(const char *name, uint8_t *arr, int len) {
     int cx, i;
     size_t outsize = 40 + strlen(name) + len * 5;
     char *output = calloc(outsize, sizeof(char));
@@ -150,12 +151,12 @@ void printarr(char *name, uint8_t *arr, int len) {
     for (i = 0; i < len; i++) {
         cx += snprintf(output + cx, outsize - cx, "0x%02x,", *(arr + i)); //5 bytes per byte
     }
-    cx += snprintf(output + cx, outsize - cx, "};");
+    snprintf(output + cx, outsize - cx, "};");
     PrintAndLogDevice(NORMAL, output);
     free(output);
 }
 
-void printvar(char *name, uint8_t *arr, int len) {
+void printvar(const char *name, uint8_t *arr, int len) {
     int cx, i;
     size_t outsize = 40 + strlen(name) + len * 2;
     char *output = calloc(outsize, sizeof(char));
@@ -168,7 +169,7 @@ void printvar(char *name, uint8_t *arr, int len) {
     free(output);
 }
 
-void printarr_human_readable(char *title, uint8_t *arr, int len) {
+void printarr_human_readable(const char *title, uint8_t *arr, int len) {
     int cx, i;
     size_t outsize = 100 + strlen(title) + len * 4;
     char *output = calloc(outsize, sizeof(char));
@@ -187,7 +188,7 @@ void printarr_human_readable(char *title, uint8_t *arr, int len) {
 //-----------------------------
 
 #ifndef ON_DEVICE
-int testBitStream() {
+static int testBitStream() {
     uint8_t input [] = {0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD, 0xBE, 0xEF};
     uint8_t output [] = {0, 0, 0, 0, 0, 0, 0, 0};
     BitstreamIn in = { input, sizeof(input) * 8, 0};
@@ -212,7 +213,7 @@ int testBitStream() {
     return 0;
 }
 
-int testReversedBitstream() {
+static int testReversedBitstream() {
     uint8_t input [] = {0xDE, 0xAD, 0xBE, 0xEF, 0xDE, 0xAD, 0xBE, 0xEF};
     uint8_t reverse [] = {0, 0, 0, 0, 0, 0, 0, 0};
     uint8_t output [] = {0, 0, 0, 0, 0, 0, 0, 0};

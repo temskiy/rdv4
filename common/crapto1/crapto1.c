@@ -85,13 +85,12 @@ static struct Crypto1State *
 recover(uint32_t *o_head, uint32_t *o_tail, uint32_t oks,
         uint32_t *e_head, uint32_t *e_tail, uint32_t eks, int rem,
         struct Crypto1State *sl, uint32_t in, bucket_array_t bucket) {
-    uint32_t *o, *e;
     bucket_info_t bucket_info;
 
     if (rem == -1) {
-        for (e = e_head; e <= e_tail; ++e) {
-            *e = *e << 1 ^ (evenparity32(*e & LF_POLY_EVEN)) ^ !!(in & 4);
-            for (o = o_head; o <= o_tail; ++o, ++sl) {
+        for (uint32_t *e = e_head; e <= e_tail; ++e) {
+            *e = *e << 1 ^ (evenparity32(*e & LF_POLY_EVEN)) ^ (!!(in & 4));
+            for (uint32_t *o = o_head; o <= o_tail; ++o, ++sl) {
                 sl->even = *o;
                 sl->odd = *e ^ (evenparity32(*o & LF_POLY_ODD));
                 sl[1].odd = sl[1].even = 0;
@@ -154,7 +153,7 @@ struct Crypto1State *lfsr_recovery32(uint32_t ks2, uint32_t in) {
     // allocate memory for out of place bucket_sort
     bucket_array_t bucket;
 
-    for (uint32_t i = 0; i < 2; i++) {
+    for (i = 0; i < 2; i++) {
         for (uint32_t j = 0; j <= 0xff; j++) {
             bucket[i][j].head = malloc(sizeof(uint32_t) << 14);
             if (!bucket[i][j].head) {
@@ -184,7 +183,7 @@ struct Crypto1State *lfsr_recovery32(uint32_t ks2, uint32_t in) {
     recover(odd_head, odd_tail, oks, even_head, even_tail, eks, 11, statelist, in << 1, bucket);
 
 out:
-    for (uint32_t i = 0; i < 2; i++)
+    for (i = 0; i < 2; i++)
         for (uint32_t j = 0; j <= 0xff; j++)
             free(bucket[i][j].head);
     free(odd_head);
@@ -301,7 +300,7 @@ uint8_t lfsr_rollback_bit(struct Crypto1State *s, uint32_t in, int fb) {
     out ^= LF_POLY_EVEN & (s->even >>= 1);
     out ^= LF_POLY_ODD & s->odd;
     out ^= !!in;
-    out ^= (ret = filter(s->odd)) & !!fb;
+    out ^= (ret = filter(s->odd)) & (!!fb);
 
     s->even |= (evenparity32(out)) << 23;
     return ret;
@@ -370,12 +369,12 @@ uint32_t lfsr_rollback_word(struct Crypto1State *s, uint32_t in, int fb) {
  */
 static uint16_t *dist = 0;
 int nonce_distance(uint32_t from, uint32_t to) {
-    uint16_t x, i;
     if (!dist) {
         dist = calloc(2 << 16,  sizeof(uint8_t));
         if (!dist)
             return -1;
-        for (x = i = 1; i; ++i) {
+        uint16_t x = 1;
+        for (uint16_t i = 1; i; ++i) {
             dist[(x & 0xff) << 8 | x >> 8] = i;
             x = x >> 1 | (x ^ x >> 2 ^ x >> 3 ^ x >> 5) << 15;
         }
@@ -413,12 +412,12 @@ uint32_t *lfsr_prefix_ks(uint8_t ks[8], int isodd) {
     uint32_t *candidates = calloc(4 << 10, sizeof(uint8_t));
     if (!candidates) return 0;
 
-    uint32_t c,  entry;
-    int size = 0, i, good;
+    int size = 0;
 
-    for (i = 0; i < 1 << 21; ++i) {
-        for (c = 0, good = 1; good && c < 8; ++c) {
-            entry = i ^ fastfwd[isodd][c];
+    for (int i = 0; i < 1 << 21; ++i) {
+        int good = 1;
+        for (uint32_t c = 0; good && c < 8; ++c) {
+            uint32_t entry = i ^ fastfwd[isodd][c];
             good &= (BIT(ks[c], isodd) == filter(entry >> 1));
             good &= (BIT(ks[c], isodd + 2) == filter(entry));
         }
@@ -435,24 +434,24 @@ uint32_t *lfsr_prefix_ks(uint8_t ks[8], int isodd) {
  * helper function which eliminates possible secret states using parity bits
  */
 static struct Crypto1State *check_pfx_parity(uint32_t prefix, uint32_t rresp, uint8_t parities[8][8], uint32_t odd, uint32_t even, struct Crypto1State *sl, uint32_t no_par) {
-    uint32_t ks1, nr, ks2, rr, ks3, c, good = 1;
+    uint32_t good = 1;
 
-    for (c = 0; good && c < 8; ++c) {
+    for (uint32_t c = 0; good && c < 8; ++c) {
         sl->odd = odd ^ fastfwd[1][c];
         sl->even = even ^ fastfwd[0][c];
 
         lfsr_rollback_bit(sl, 0, 0);
         lfsr_rollback_bit(sl, 0, 0);
 
-        ks3 = lfsr_rollback_bit(sl, 0, 0);
-        ks2 = lfsr_rollback_word(sl, 0, 0);
-        ks1 = lfsr_rollback_word(sl, prefix | c << 5, 1);
+        uint32_t ks3 = lfsr_rollback_bit(sl, 0, 0);
+        uint32_t ks2 = lfsr_rollback_word(sl, 0, 0);
+        uint32_t ks1 = lfsr_rollback_word(sl, prefix | c << 5, 1);
 
         if (no_par)
             break;
 
-        nr = ks1 ^ (prefix | c << 5);
-        rr = ks2 ^ rresp;
+        uint32_t nr = ks1 ^ (prefix | c << 5);
+        uint32_t rr = ks2 ^ rresp;
 
         good &= evenparity32(nr & 0x000000ff) ^ parities[c][3] ^ BIT(ks2, 24);
         good &= evenparity32(rr & 0xff000000) ^ parities[c][4] ^ BIT(ks2, 16);

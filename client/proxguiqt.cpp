@@ -33,8 +33,8 @@ extern "C" {
 
 bool g_useOverlays = false;
 int g_absVMax = 0;
-int startMax;
-int PageWidth;
+uint32_t startMax; // Maximum offset in the graph (right side of graph)
+uint32_t PageWidth; // How many samples are currently visible on this 'page' / graph
 int unlockStart = 0;
 
 void ProxGuiQT::ShowGraphWindow(void) {
@@ -274,18 +274,20 @@ QColor Plot::getColor(int graphNum) {
     }
 }
 
-void Plot::setMaxAndStart(int *buffer, int len, QRect plotRect) {
+void Plot::setMaxAndStart(int *buffer, size_t len, QRect plotRect) {
     if (len == 0) return;
-    startMax = (len - (int)((plotRect.right() - plotRect.left() - 40) / GraphPixelsPerPoint));
-    if (startMax < 0) {
-        startMax = 0;
+    startMax = 0;
+    if (plotRect.right() >= plotRect.left() + 40) {
+        uint32_t t = (plotRect.right() - plotRect.left() - 40) / GraphPixelsPerPoint;
+        if (len >= t)
+            startMax = len - t;
     }
     if (GraphStart > startMax) {
         GraphStart = startMax;
     }
     if (GraphStart > len) return;
     int vMin = INT_MAX, vMax = INT_MIN, v = 0;
-    int sample_index = GraphStart ;
+    uint32_t sample_index = GraphStart ;
     for (; sample_index < len && xCoordOf(sample_index, plotRect) < plotRect.right() ; sample_index++) {
 
         v = buffer[sample_index];
@@ -299,7 +301,7 @@ void Plot::setMaxAndStart(int *buffer, int len, QRect plotRect) {
     g_absVMax = (int)(g_absVMax * 1.25 + 1);
 }
 
-void Plot::PlotDemod(uint8_t *buffer, size_t len, QRect plotRect, QRect annotationRect, QPainter *painter, int graphNum, int plotOffset) {
+void Plot::PlotDemod(uint8_t *buffer, size_t len, QRect plotRect, QRect annotationRect, QPainter *painter, int graphNum, uint32_t plotOffset) {
     if (len == 0 || PlotGridX <= 0) return;
     //clock_t begin = clock();
     QPainterPath penPath;
@@ -354,11 +356,12 @@ void Plot::PlotDemod(uint8_t *buffer, size_t len, QRect plotRect, QRect annotati
     painter->drawPath(penPath);
 }
 
-void Plot::PlotGraph(int *buffer, int len, QRect plotRect, QRect annotationRect, QPainter *painter, int graphNum) {
+void Plot::PlotGraph(int *buffer, size_t len, QRect plotRect, QRect annotationRect, QPainter *painter, int graphNum) {
     if (len == 0) return;
     // clock_t begin = clock();
     QPainterPath penPath;
-    int vMin = INT_MAX, vMax = INT_MIN, vMean = 0, v = 0, i = 0;
+    int vMin = INT_MAX, vMax = INT_MIN, vMean = 0, v = 0;
+    uint32_t i = 0;
     int x = xCoordOf(GraphStart, plotRect);
     int y = yCoordOf(buffer[GraphStart], plotRect, g_absVMax);
     penPath.moveTo(x, y);
@@ -416,7 +419,7 @@ void Plot::PlotGraph(int *buffer, int len, QRect plotRect, QRect annotationRect,
     //Graph annotations
     painter->drawPath(penPath);
     char str[200];
-    sprintf(str, "max=%d  min=%d  mean=%d  n=%d/%d  CursorAVal=[%d]  CursorBVal=[%d]",
+    sprintf(str, "max=%d  min=%d  mean=%d  n=%d/%zu  CursorAVal=[%d]  CursorBVal=[%d]",
             vMax, vMin, vMean, i, len, buffer[CursorAPos], buffer[CursorBPos]);
     painter->drawText(20, annotationRect.bottom() - 23 - 20 * graphNum, str);
 
@@ -469,9 +472,6 @@ void Plot::paintEvent(QPaintEvent *event) {
 
     painter.setFont(QFont("Courier New", 10));
 
-    if (GraphStart < 0)
-        GraphStart = 0;
-
     if (CursorAPos > GraphTraceLen)
         CursorAPos = 0;
     if (CursorBPos > GraphTraceLen)
@@ -483,6 +483,7 @@ void Plot::paintEvent(QPaintEvent *event) {
 
     QRect plotRect(WIDTH_AXES, 0, width() - WIDTH_AXES, height() - HEIGHT_INFO);
     QRect infoRect(0, height() - HEIGHT_INFO, width(), HEIGHT_INFO);
+    PageWidth = plotRect.width() / GraphPixelsPerPoint;
 
     //Grey background
     painter.fillRect(rect(), QColor(60, 60, 60));
@@ -586,7 +587,7 @@ void Plot::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void Plot::keyPressEvent(QKeyEvent *event) {
-    int offset;
+    uint32_t offset; // Left/right movement offset (in sample size)
 
     if (event->modifiers() & Qt::ShiftModifier) {
         if (PlotGridX)
@@ -623,9 +624,15 @@ void Plot::keyPressEvent(QKeyEvent *event) {
 
         case Qt::Key_Left:
             if (GraphPixelsPerPoint < 20) {
-                GraphStart -= offset;
+                if (GraphStart >= offset) {
+                    GraphStart -= offset;
+                } else {
+                    GraphStart = 0;
+                }
             } else {
-                GraphStart--;
+                if (GraphStart > 0) {
+                    GraphStart--;
+                }
             }
             break;
 
@@ -645,7 +652,6 @@ void Plot::keyPressEvent(QKeyEvent *event) {
             break;
 
         case Qt::Key_H:
-
             puts("\n-----------------------------------------------------------------------");
             puts("PLOT window keystrokes");
             puts("\tKey                      Action");
@@ -656,6 +662,10 @@ void Plot::keyPressEvent(QKeyEvent *event) {
             puts("\tH                        Show help");
             puts("\tL                        Toggle lock grid relative to samples");
             puts("\tQ                        Hide window");
+            puts("\tHOME                     Move to the start of the graph");
+            puts("\tEND                      Move to the end of the graph");
+            puts("\tPGUP                     Page left");
+            puts("\tPGDOWN                   Page right");
             puts("\tLEFT                     Move left");
             puts("\t<CTLR> LEFT              Move left 1 sample");
             puts("\t<SHIFT> LEFT             Page left");
@@ -677,6 +687,28 @@ void Plot::keyPressEvent(QKeyEvent *event) {
 
         case Qt::Key_Q:
             master->hide();
+            break;
+
+        case Qt::Key_Home:
+            GraphStart = 0;
+            break;
+
+        case Qt::Key_End:
+            GraphStart = startMax;
+            break;
+
+        case Qt::Key_PageUp:
+            if (GraphStart >= PageWidth) {
+                GraphStart -= PageWidth;
+            } else {
+                GraphStart = 0;
+            }
+            break;
+
+        case Qt::Key_PageDown:
+            GraphStart += PageWidth;
+            if (GraphStart > startMax)
+                GraphStart = startMax;
             break;
 
         default:

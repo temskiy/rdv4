@@ -80,10 +80,14 @@ void FlashSetup(uint32_t baudrate) {
 
     uint8_t csaat = 1;
     uint32_t dlybct = 0;
+    uint8_t ncpha = 1;
+    uint8_t cpol = 0;
     if (baudrate > FLASH_MINFAST) {
         baudrate = FLASH_FASTBAUD;
         //csaat = 0;
         dlybct = 1500;
+        ncpha = 0;
+        cpol = 0;
     }
 
     AT91C_BASE_SPI->SPI_CSR[2] =
@@ -119,9 +123,10 @@ void FlashSetup(uint32_t baudrate) {
             1    0    1    1       clock normally low    read on falling edge
             2    1    0    0       clock normally high   read on falling edge
             3    1    1    1       clock normally high   read on rising edge
+            Update: for 24MHz, writing is more stable with ncpha=1, else bitflips occur.
         */
-        (0 << 1)             |  // Clock Phase data captured on leading edge, changes on following edge
-        (0 << 0);               // Clock Polarity inactive state is logic 0
+        (ncpha << 1)             |  // Clock Phase data captured on leading edge, changes on following edge
+        (cpol << 0);               // Clock Polarity inactive state is logic 0
 
     // read first, empty buffer
     if (AT91C_BASE_SPI->SPI_RDR == 0) {};
@@ -144,7 +149,7 @@ void FlashStop(void) {
     // SPI disable
     AT91C_BASE_SPI->SPI_CR = AT91C_SPI_SPIDIS;
 
-    if (MF_DBGLEVEL > 3) Dbprintf("FlashStop");
+    if (DBGLEVEL > 3) Dbprintf("FlashStop");
 
     StopTicks();
 }
@@ -184,7 +189,7 @@ bool Flash_CheckBusy(uint32_t timeout) {
     StartCountUS();
     uint32_t _time = GetCountUS();
 
-    if (MF_DBGLEVEL > 3) Dbprintf("Checkbusy in...");
+    if (DBGLEVEL > 3) Dbprintf("Checkbusy in...");
 
     do {
         if (!(Flash_ReadStat1() & BUSY)) {
@@ -213,7 +218,7 @@ uint8_t Flash_ReadID(void) {
     uint8_t man_id = FlashSendByte(0xFF);
     uint8_t dev_id = FlashSendLastByte(0xFF);
 
-    if (MF_DBGLEVEL > 3) Dbprintf("Flash ReadID  |  Man ID %02x | Device ID %02x", man_id, dev_id);
+    if (DBGLEVEL > 3) Dbprintf("Flash ReadID  |  Man ID %02x | Device ID %02x", man_id, dev_id);
 
     if ((man_id == WINBOND_MANID) && (dev_id == WINBOND_DEVID))
         return dev_id;
@@ -320,7 +325,7 @@ uint16_t Flash_WriteData(uint32_t address, uint8_t *in, uint16_t len) {
     }
 
     if (!FlashInit()) {
-        if (MF_DBGLEVEL > 3) Dbprintf("Flash_WriteData init fail");
+        if (DBGLEVEL > 3) Dbprintf("Flash_WriteData init fail");
         return 0;
     }
 
@@ -410,7 +415,7 @@ out:
 
 bool Flash_WipeMemoryPage(uint8_t page) {
     if (!FlashInit()) {
-        if (MF_DBGLEVEL > 3) Dbprintf("Flash_WriteData init fail");
+        if (DBGLEVEL > 3) Dbprintf("Flash_WriteData init fail");
         return false;
     }
     Flash_ReadStat1();
@@ -426,7 +431,7 @@ bool Flash_WipeMemoryPage(uint8_t page) {
 // Wipes flash memory completely, fills with 0xFF
 bool Flash_WipeMemory() {
     if (!FlashInit()) {
-        if (MF_DBGLEVEL > 3) Dbprintf("Flash_WriteData init fail");
+        if (DBGLEVEL > 3) Dbprintf("Flash_WriteData init fail");
         return false;
     }
     Flash_ReadStat1();
@@ -453,7 +458,7 @@ bool Flash_WipeMemory() {
 // enable the flash write
 void Flash_WriteEnable() {
     FlashSendLastByte(WRITEENABLE);
-    if (MF_DBGLEVEL > 3) Dbprintf("Flash Write enabled");
+    if (DBGLEVEL > 3) Dbprintf("Flash Write enabled");
 }
 
 // erase 4K at one time
@@ -474,7 +479,7 @@ bool Flash_Erase4k(uint8_t block, uint8_t sector) {
 // execution time: 0,3s / 300ms
 bool Flash_Erase32k(uint32_t address) {
     if (address & (32*1024 - 1)) {
-        if ( MF_DBGLEVEL > 1 ) Dbprintf("Flash_Erase32k : Address is not align at 4096");
+        if ( DBGLEVEL > 1 ) Dbprintf("Flash_Erase32k : Address is not align at 4096");
         return false;
     }
     FlashSendByte(BLOCK32ERASE);
@@ -504,43 +509,80 @@ bool Flash_Erase64k(uint8_t block) {
     return true;
 }
 
+/*
 // Erase chip
 void Flash_EraseChip(void) {
     FlashSendLastByte(CHIPERASE);
 }
+*/
 
 void Flashmem_print_status(void) {
-    DbpString("Flash memory");
-    Dbprintf("  Baudrate................%dMHz", FLASHMEM_SPIBAUDRATE / 1000000);
+    DbpString(_BLUE_("Flash memory"));
+    Dbprintf("  Baudrate................" _GREEN_("%d MHz"), FLASHMEM_SPIBAUDRATE / 1000000);
 
     if (!FlashInit()) {
-        DbpString("  Init....................FAIL");
+        DbpString("  Init...................." _RED_("FAILED"));
         return;
     }
-    DbpString("  Init....................OK");
+    DbpString("  Init...................." _GREEN_("OK"));
 
     uint8_t dev_id = Flash_ReadID();
     switch (dev_id) {
         case 0x11 :
-            DbpString("  Memory size.............2 mbits / 256kb");
+            DbpString("  Memory size............." _YELLOW_("2 mbits / 256 kb"));
             break;
         case 0x10 :
-            DbpString("  Memory size..... .......1 mbits / 128kb");
+            DbpString("  Memory size..... ......." _YELLOW_("1 mbits / 128 kb"));
             break;
         case 0x05 :
-            DbpString("  Memory size.............512 kbits / 64kb");
+            DbpString("  Memory size............." _YELLOW_("512 kbits / 64 kb"));
             break;
         default :
-            DbpString("  Device ID............... -->  Unknown  <--");
+            DbpString("  Device ID..............." _YELLOW_(" -->  Unknown  <--"));
             break;
     }
 
     uint8_t uid[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     Flash_UniqueID(uid);
-    Dbprintf("  Unique ID...............0x%02x%02x%02x%02x%02x%02x%02x%02x",
+    Dbprintf("  Unique ID...............0x%02X%02X%02X%02X%02X%02X%02X%02X",
              uid[7], uid[6], uid[5], uid[4],
              uid[3], uid[2], uid[1], uid[0]
             );
 
     FlashStop();
 }
+
+void Flashmem_print_info(void) {
+    if (!FlashInit()) return;
+
+    DbpString(_BLUE_("Flash memory dictionary loaded"));
+
+    // load dictionary offsets.
+    uint8_t keysum[2];
+    uint16_t num;
+
+    uint16_t isok = Flash_ReadDataCont(DEFAULT_MF_KEYS_OFFSET, keysum, 2);
+    if (isok == 2) {
+        num = ((keysum[1] << 8) | keysum[0]);
+        if (num != 0xFFFF && num != 0x0)
+            Dbprintf("  Mifare................"_YELLOW_("%d")"keys", num);
+    }
+
+    isok = Flash_ReadDataCont(DEFAULT_T55XX_KEYS_OFFSET, keysum, 2);
+    if (isok == 2) {
+        num = ((keysum[1] << 8) | keysum[0]);
+        if (num != 0xFFFF && num != 0x0)
+            Dbprintf("  T55x7................."_YELLOW_("%d")"keys", num);
+    }
+
+    isok = Flash_ReadDataCont(DEFAULT_ICLASS_KEYS_OFFSET, keysum, 2);
+    if (isok == 2) {
+        num = ((keysum[1] << 8) | keysum[0]);
+        if (num != 0xFFFF && num != 0x0)
+            Dbprintf("  iClass................"_YELLOW_("%d")"keys", num);
+    }
+
+    FlashStop();
+}
+
+

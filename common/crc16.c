@@ -9,21 +9,21 @@
 
 static uint16_t crc_table[256];
 static bool crc_table_init = false;
-static CrcType_t crc_type = CRC_NONE;
+static CrcType_t current_crc_type = CRC_NONE;
 
-void init_table(CrcType_t ct) {
+void init_table(CrcType_t crctype) {
 
     // same crc algo, and initialised already
-    if (ct == crc_type && crc_table_init)
+    if (crctype == current_crc_type && crc_table_init)
         return;
 
     // not the same crc algo. reset table.
-    if (ct != crc_type)
+    if (crctype != current_crc_type)
         reset_table();
 
-    crc_type = ct;
+    current_crc_type = crctype;
 
-    switch (ct) {
+    switch (crctype) {
         case CRC_14443_A:
         case CRC_14443_B:
         case CRC_15693:
@@ -42,25 +42,23 @@ void init_table(CrcType_t ct) {
         case CRC_KERMIT:
             generate_table(CRC16_POLY_CCITT, true);
             break;
-        default:
+        case CRC_NONE:
             crc_table_init = false;
-            crc_type = CRC_NONE;
+            current_crc_type = CRC_NONE;
             break;
     }
 }
 
 void generate_table(uint16_t polynomial, bool refin) {
 
-    uint16_t i, j, crc, c;
-
-    for (i = 0; i < 256; i++) {
-        crc = 0;
+    for (uint16_t i = 0; i < 256; i++) {
+        uint16_t c, crc = 0;
         if (refin)
             c = reflect8(i) << 8;
         else
             c = i << 8;
 
-        for (j = 0; j < 8; j++) {
+        for (uint16_t j = 0; j < 8; j++) {
 
             if ((crc ^ c) & 0x8000)
                 crc = (crc << 1) ^ polynomial;
@@ -80,7 +78,7 @@ void generate_table(uint16_t polynomial, bool refin) {
 void reset_table(void) {
     memset(crc_table, 0, sizeof(crc_table));
     crc_table_init = false;
-    crc_type = CRC_NONE;
+    current_crc_type = CRC_NONE;
 }
 
 // table lookup LUT solution
@@ -109,11 +107,10 @@ uint16_t crc16_fast(uint8_t const *d, size_t n, uint16_t initval, bool refin, bo
 
 // bit looped solution  TODO REMOVED
 uint16_t update_crc16_ex(uint16_t crc, uint8_t c, uint16_t polynomial) {
-    uint16_t i, v, tmp = 0;
+    uint16_t tmp = 0;
+    uint16_t v = (crc ^ c) & 0xff;
 
-    v = (crc ^ c) & 0xff;
-
-    for (i = 0; i < 8; i++) {
+    for (uint16_t i = 0; i < 8; i++) {
 
         if ((tmp ^ v) & 1)
             tmp = (tmp >> 1) ^ polynomial;
@@ -129,13 +126,12 @@ uint16_t update_crc16(uint16_t crc, uint8_t c) {
 }
 
 // two ways.  msb or lsb loop.
-uint16_t crc16(uint8_t const *d, size_t length, uint16_t remainder, uint16_t polynomial, bool refin, bool refout) {
+uint16_t Crc16(uint8_t const *d, size_t length, uint16_t remainder, uint16_t polynomial, bool refin, bool refout) {
     if (length == 0)
         return (~remainder);
 
-    uint8_t c;
     for (uint32_t i = 0; i < length; ++i) {
-        c = d[i];
+        uint8_t c = d[i];
         if (refin) c = reflect8(c);
 
         // xor in at msb
@@ -178,20 +174,22 @@ void compute_crc(CrcType_t ct, const uint8_t *d, size_t n, uint8_t *first, uint8
         case CRC_FELICA:
             crc = crc16_xmodem(d, n);
             break;
-        //case CRC_LEGIC:
         case CRC_CCITT:
             crc = crc16_ccitt(d, n);
             break;
         case CRC_KERMIT:
             crc = crc16_kermit(d, n);
             break;
-        default:
-            break;
+        case CRC_LEGIC:
+            // TODO
+            return;
+        case CRC_NONE:
+            return;
     }
     *first = (crc & 0xFF);
     *second = ((crc >> 8) & 0xFF);
 }
-uint16_t crc(CrcType_t ct, const uint8_t *d, size_t n) {
+uint16_t Crc16ex(CrcType_t ct, const uint8_t *d, size_t n) {
 
     // can't calc a crc on less than 3 byte. (1byte + 2 crc bytes)
     if (n < 3) return 0;
@@ -207,11 +205,13 @@ uint16_t crc(CrcType_t ct, const uint8_t *d, size_t n) {
             return crc16_iclass(d, n);
         case CRC_FELICA:
             return crc16_xmodem(d, n);
-        //case CRC_LEGIC:
         case CRC_CCITT:
             return crc16_ccitt(d, n);
         case CRC_KERMIT:
             return crc16_kermit(d, n);
+        case CRC_LEGIC:
+            // TODO
+            return 0;
         default:
             break;
     }
@@ -245,9 +245,11 @@ bool check_crc(CrcType_t ct, const uint8_t *d, size_t n) {
             return (crc16_iclass(d, n) == 0);
         case CRC_FELICA:
             return (crc16_xmodem(d, n) == 0);
-        //case CRC_LEGIC:
         case CRC_CCITT:
             return (crc16_ccitt(d, n) == 0);
+        case CRC_LEGIC:
+            // TODO
+            return false;
         default:
             break;
     }

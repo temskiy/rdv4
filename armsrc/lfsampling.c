@@ -19,8 +19,8 @@ Default LF config is set to:
 sample_config config = { 1, 8, 1, 95, 0 } ;
 
 void printConfig() {
-    Dbprintf("LF Sampling config");
-    Dbprintf("  [q] divisor.............%d (%d KHz)", config.divisor, 12000 / (config.divisor + 1));
+    DbpString(_BLUE_("LF Sampling config"));
+    Dbprintf("  [q] divisor.............%d ( "_GREEN_("%d kHz")")", config.divisor, 12000 / (config.divisor + 1));
     Dbprintf("  [b] bps.................%d", config.bits_per_sample);
     Dbprintf("  [d] decimation..........%d", config.decimation);
     Dbprintf("  [a] averaging...........%s", (config.averaging) ? "Yes" : "No");
@@ -76,8 +76,8 @@ void pushBit(BitstreamOut *stream, uint8_t bit) {
 /**
 * Setup the FPGA to listen for samples. This method downloads the FPGA bitstream
 * if not already loaded, sets divisor and starts up the antenna.
-* @param divisor : 1, 88> 255 or negative ==> 134.8 KHz
-*                  0 or 95 ==> 125 KHz
+* @param divisor : 1, 88> 255 or negative ==> 134.8 kHz
+*                  0 or 95 ==> 125 kHz
 *
 **/
 void LFSetupFPGAForADC(int divisor, bool lf_field) {
@@ -129,15 +129,26 @@ uint32_t DoAcquisition(uint8_t decimation, uint32_t bits_per_sample, bool averag
     // use a bit stream to handle the output
     BitstreamOut data = { dest, 0, 0};
     int sample_counter = 0;
-    uint8_t sample = 0;
+    uint8_t sample;
 
     // if we want to do averaging
     uint32_t sample_sum = 0 ;
     uint32_t sample_total_numbers = 0;
     uint32_t sample_total_saved = 0;
     uint32_t cancel_counter = 0;
-
-    while (!BUTTON_PRESS() && !usb_poll_validate_length()) {
+    
+    uint16_t checker = 0;
+  
+    while (true) {
+        if ( checker == 1000 ) {
+            if (BUTTON_PRESS() || data_available())
+                break;
+            else
+                checker = 0;
+        } else {
+            ++checker;
+        }
+    
         WDT_HIT();
 
         if (AT91C_BASE_SSC->SSC_SR & AT91C_SSC_RXRDY) {
@@ -199,7 +210,7 @@ uint32_t DoAcquisition(uint8_t decimation, uint32_t bits_per_sample, bool averag
     }
 
     if (!silent) {
-        Dbprintf("Done, saved %d out of %d seen samples at %d bits/sample", sample_total_saved, sample_total_numbers, bits_per_sample);
+        Dbprintf("Done, saved " _YELLOW_("%d")"out of " _YELLOW_("%d")"seen samples at " _YELLOW_("%d")"bits/sample", sample_total_saved, sample_total_numbers, bits_per_sample);
         Dbprintf("buffer samples: %02x %02x %02x %02x %02x %02x %02x %02x ...",
                  dest[0], dest[1], dest[2], dest[3], dest[4], dest[5], dest[6], dest[7]);
     }
@@ -248,9 +259,9 @@ uint32_t ReadLF(bool activeField, bool silent, int sample_size) {
 * Initializes the FPGA for reader-mode (field on), and acquires the samples.
 * @return number of bits sampled
 **/
-uint32_t SampleLF(bool printCfg, int sample_size) {
+uint32_t SampleLF(bool silent, int sample_size) {
     BigBuf_Clear_ext(false);
-    return ReadLF(true, printCfg, sample_size);
+    return ReadLF(true, silent, sample_size);
 }
 /**
 * Initializes the FPGA for sniffer-mode (field off), and acquires the samples.
@@ -277,13 +288,24 @@ void doT55x7Acquisition(size_t sample_size) {
     if (bufsize > sample_size)
         bufsize = sample_size;
 
-    uint8_t curSample = 0, lastSample = 0;
+    uint8_t curSample, lastSample = 0;
     uint16_t i = 0, skipCnt = 0;
     bool startFound = false;
     bool highFound = false;
     bool lowFound = false;
+    
+    uint16_t checker = 0;
+  
+    while ( skipCnt < 1000 && (i < bufsize)) {
+        if ( checker == 1000 ) {
+            if (BUTTON_PRESS() || data_available())
+                break;
+            else
+                checker = 0;
+        } else {
+            ++checker;
+        }
 
-    while (!BUTTON_PRESS() && !usb_poll_validate_length() && skipCnt < 1000 && (i < bufsize)) {
         WDT_HIT();
 
 
@@ -344,11 +366,22 @@ void doCotagAcquisition(size_t sample_size) {
         bufsize = sample_size;
 
     dest[0] = 0;
-    uint8_t sample = 0, firsthigh = 0, firstlow = 0;
+    uint8_t sample, firsthigh = 0, firstlow = 0;
     uint16_t i = 0;
     uint16_t noise_counter = 0;
 
-    while (!BUTTON_PRESS() && !usb_poll_validate_length() && (i < bufsize) && (noise_counter < (COTAG_T1 << 1))) {
+    uint16_t checker = 0;
+  
+    while ((i < bufsize) && (noise_counter < (COTAG_T1 << 1))) {
+        if ( checker == 1000 ) {
+            if (BUTTON_PRESS() || data_available())
+                break;
+            else
+                checker = 0;
+        } else {
+            ++checker;
+        }
+
         WDT_HIT();
 
         if (AT91C_BASE_SSC->SSC_SR & AT91C_SSC_RXRDY) {
@@ -393,12 +426,22 @@ uint32_t doCotagAcquisitionManchester() {
         bufsize = COTAG_BITS;
 
     dest[0] = 0;
-    uint8_t sample = 0, firsthigh = 0, firstlow = 0;
+    uint8_t sample, firsthigh = 0, firstlow = 0;
     uint16_t sample_counter = 0, period = 0;
     uint8_t curr = 0, prev = 0;
     uint16_t noise_counter = 0;
+    uint16_t checker = 0;
+  
+    while ((sample_counter < bufsize) && (noise_counter < (COTAG_T1 << 1))) {
+        if ( checker == 1000 ) {
+            if (BUTTON_PRESS() || data_available())
+                break;
+            else
+                checker = 0;
+        } else {
+            ++checker;
+        }
 
-    while (!BUTTON_PRESS() && !usb_poll_validate_length() && (sample_counter < bufsize)  && (noise_counter < (COTAG_T1 << 1))) {
         WDT_HIT();
 
         if (AT91C_BASE_SSC->SSC_SR & AT91C_SSC_RXRDY) {

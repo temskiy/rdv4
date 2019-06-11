@@ -85,7 +85,7 @@ static int debug_print = 0;
  * @param n bitnumber
  * @return
  */
-uint8_t getSixBitByte(uint64_t c, int n) {
+static uint8_t getSixBitByte(uint64_t c, int n) {
     return (c >> (42 - 6 * n)) & 0x3F;
 }
 
@@ -95,7 +95,7 @@ uint8_t getSixBitByte(uint64_t c, int n) {
  * @param z the value to place there
  * @param n bitnumber.
  */
-void pushbackSixBitByte(uint64_t *c, uint8_t z, int n) {
+static void pushbackSixBitByte(uint64_t *c, uint8_t z, int n) {
     //0x XXXX YYYY ZZZZ ZZZZ ZZZZ
     //             ^z0         ^z7
     //z0:  1111 1100 0000 0000
@@ -120,7 +120,7 @@ void pushbackSixBitByte(uint64_t *c, uint8_t z, int n) {
  * @param c
  * @return
  */
-uint64_t swapZvalues(uint64_t c) {
+static uint64_t swapZvalues(uint64_t c) {
     uint64_t newz = 0;
     pushbackSixBitByte(&newz, getSixBitByte(c, 0), 7);
     pushbackSixBitByte(&newz, getSixBitByte(c, 1), 6);
@@ -137,7 +137,7 @@ uint64_t swapZvalues(uint64_t c) {
 /**
 * @return 4 six-bit bytes chunked into a uint64_t,as 00..00a0a1a2a3
 */
-uint64_t ck(int i, int j, uint64_t z) {
+static uint64_t ck(int i, int j, uint64_t z) {
     if (i == 1 && j == -1) {
         // ck(1, −1, z [0] . . . z [3] ) = z [0] . . . z [3]
         return z;
@@ -179,7 +179,7 @@ uint64_t ck(int i, int j, uint64_t z) {
     otherwise.
 **/
 
-uint64_t check(uint64_t z) {
+static uint64_t check(uint64_t z) {
     //These 64 bits are divided as c = x, y, z [0] , . . . , z [7]
 
     // ck(3, 2, z [0] . . . z [3] )
@@ -197,7 +197,7 @@ uint64_t check(uint64_t z) {
 
 }
 
-void permute(BitstreamIn *p_in, uint64_t z, int l, int r, BitstreamOut *out) {
+static void permute(BitstreamIn *p_in, uint64_t z, int l, int r, BitstreamOut *out) {
     if (bitsLeft(p_in) == 0)
         return;
 
@@ -214,14 +214,14 @@ void permute(BitstreamIn *p_in, uint64_t z, int l, int r, BitstreamOut *out) {
         permute(p_in, z, l, r + 1, out);
     }
 }
-void printbegin() {
+static void printbegin() {
     if (debug_print < 2)
         return;
 
     PrintAndLogDevice(NORMAL, "          | x| y|z0|z1|z2|z3|z4|z5|z6|z7|");
 }
 
-void printState(char *desc, uint64_t c) {
+static void printState(const char *desc, uint64_t c) {
     if (debug_print < 2)
         return;
 
@@ -257,17 +257,15 @@ void hash0(uint64_t c, uint8_t k[8]) {
     // z0-z7 6 bits each : 48 bits
     uint8_t x = (c & 0xFF00000000000000) >> 56;
     uint8_t y = (c & 0x00FF000000000000) >> 48;
-    int n;
-    uint8_t zn, zn4, _zn, _zn4;
     uint64_t zP = 0;
 
-    for (n = 0;  n < 4 ; n++) {
-        zn = getSixBitByte(c, n);
+    for (int n = 0;  n < 4 ; n++) {
+        uint8_t zn = getSixBitByte(c, n);
 
-        zn4 = getSixBitByte(c, n + 4);
+        uint8_t zn4 = getSixBitByte(c, n + 4);
 
-        _zn = (zn % (63 - n)) + n;
-        _zn4 = (zn4 % (64 - n)) + n;
+        uint8_t _zn = (zn % (63 - n)) + n;
+        uint8_t _zn4 = (zn4 % (64 - n)) + n;
 
         pushbackSixBitByte(&zP, _zn, n);
         pushbackSixBitByte(&zP, _zn4, n + 4);
@@ -300,9 +298,8 @@ void hash0(uint64_t c, uint8_t k[8]) {
 
     printState("0|0|z~", zTilde);
 
-    int i;
-    int zerocounter = 0 ;
-    for (i = 0; i < 8; i++) {
+//    int zerocounter = 0 ;
+    for (int i = 0; i < 8; i++) {
         // the key on index i is first a bit from y
         // then six bits from z,
         // then a bit from p
@@ -340,9 +337,9 @@ void hash0(uint64_t c, uint8_t k[8]) {
             k[i] |= zTilde_i & 0x7E;
             k[i] |= (~p_i) & 1;
         }
-        if ((k[i] & 1) == 0) {
-            zerocounter++;
-        }
+//        if ((k[i] & 1) == 0) {
+//            zerocounter++;
+//        }
     }
 }
 /**
@@ -366,8 +363,8 @@ void diversifyKey(uint8_t csn[8], uint8_t key[8], uint8_t div_key[8]) {
 
     hash0(crypt_csn, div_key);
 }
-
-void testPermute() {
+/*
+static void testPermute() {
     uint64_t x = 0;
     pushbackSixBitByte(&x, 0x00, 0);
     pushbackSixBitByte(&x, 0x01, 1);
@@ -411,7 +408,7 @@ void testPermute() {
                      };
     printarr("permuted", res, 8);
 }
-
+*/
 // These testcases are
 // { UID , TEMP_KEY, DIV_KEY} using the specific key
 typedef struct {
@@ -420,7 +417,7 @@ typedef struct {
     uint8_t div_key[8];
 } Testcase;
 
-int testDES(Testcase testcase, mbedtls_des_context ctx_enc, mbedtls_des_context ctx_dec) {
+static int testDES(Testcase testcase, mbedtls_des_context ctx_enc, mbedtls_des_context ctx_dec) {
     uint8_t des_encrypted_csn[8] = {0};
     uint8_t decrypted[8] = {0};
     uint8_t div_key[8] = {0};
@@ -456,7 +453,7 @@ int testDES(Testcase testcase, mbedtls_des_context ctx_enc, mbedtls_des_context 
     }
     return retval;
 }
-bool des_getParityBitFromKey(uint8_t key) {
+static bool des_getParityBitFromKey(uint8_t key) {
     // The top 7 bits is used
     bool parity = ((key & 0x80) >> 7)
                   ^ ((key & 0x40) >> 6) ^ ((key & 0x20) >> 5)
@@ -465,7 +462,7 @@ bool des_getParityBitFromKey(uint8_t key) {
     return !parity;
 }
 
-void des_checkParity(uint8_t *key) {
+static void des_checkParity(uint8_t *key) {
     int i;
     int fails = 0;
     for (i = 0; i < 8; i++) {
@@ -553,7 +550,7 @@ Testcase testcases[] = {
     {{0}, {0}, {0}}
 };
 
-int testKeyDiversificationWithMasterkeyTestcases() {
+static int testKeyDiversificationWithMasterkeyTestcases() {
     int i, error = 0;
     uint8_t empty[8] = {0};
 
@@ -569,11 +566,11 @@ int testKeyDiversificationWithMasterkeyTestcases() {
     return error;
 }
 
-void print64bits(char *name, uint64_t val) {
+static void print64bits(const char *name, uint64_t val) {
     printf("%s%08x%08x\n", name, (uint32_t)(val >> 32), (uint32_t)(val & 0xFFFFFFFF));
 }
 
-uint64_t testCryptedCSN(uint64_t crypted_csn, uint64_t expected) {
+static uint64_t testCryptedCSN(uint64_t crypted_csn, uint64_t expected) {
     int retval = 0;
     uint8_t result[8] = {0};
     if (debug_print) PrintAndLogDevice(DEBUG, "debug_print %d", debug_print);
@@ -600,7 +597,7 @@ uint64_t testCryptedCSN(uint64_t crypted_csn, uint64_t expected) {
     return retval;
 }
 
-int testDES2(uint64_t csn, uint64_t expected) {
+static int testDES2(uint64_t csn, uint64_t expected) {
     uint8_t result[8] = {0};
     uint8_t input[8] = {0};
 
@@ -626,7 +623,7 @@ int testDES2(uint64_t csn, uint64_t expected) {
  * @brief doTestsWithKnownInputs
  * @return
  */
-int doTestsWithKnownInputs() {
+static int doTestsWithKnownInputs() {
     // KSel from http://www.proxmark.org/forum/viewtopic.php?pid=10977#p10977
     int errors = 0;
     PrintAndLogDevice(SUCCESS, "Testing DES encryption");
@@ -679,8 +676,7 @@ static bool readKeyFile(uint8_t key[8]) {
     if (bytes_read == 8)
         retval = true;
 
-    if (f)
-        fclose(f);
+    fclose(f);
     return retval;
 }
 

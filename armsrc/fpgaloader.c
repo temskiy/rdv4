@@ -229,7 +229,9 @@ static bool reset_fpga_stream(int bitstream_version, z_streamp compressed_fpga_s
     compressed_fpga_stream->zalloc = &fpga_inflate_malloc;
     compressed_fpga_stream->zfree = &fpga_inflate_free;
 
-    inflateInit2(compressed_fpga_stream, 0);
+    int res = inflateInit2(compressed_fpga_stream, 0);
+    if (res < 0)
+        return false;
 
     fpga_image_ptr = output_buffer;
 
@@ -396,7 +398,7 @@ void FpgaDownloadAndGo(int bitstream_version) {
     z_stream compressed_fpga_stream;
     uint8_t output_buffer[OUTPUT_BUFFER_LEN] = {0x00};
 
-    bool verbose = (MF_DBGLEVEL > 3);
+    bool verbose = (DBGLEVEL > 3);
 
     // make sure that we have enough memory to decompress
     BigBuf_free();
@@ -447,6 +449,9 @@ void FpgaWriteConfWord(uint8_t v) {
 // the samples from the ADC always flow through the FPGA.
 //-----------------------------------------------------------------------------
 void SetAdcMuxFor(uint32_t whichGpio) {
+
+#ifndef WITH_FPC_USART
+    // When compiled without FPC USART support
     AT91C_BASE_PIOA->PIO_OER =
         GPIO_MUXSEL_HIPKD |
         GPIO_MUXSEL_LOPKD |
@@ -461,16 +466,24 @@ void SetAdcMuxFor(uint32_t whichGpio) {
 
     LOW(GPIO_MUXSEL_HIPKD);
     LOW(GPIO_MUXSEL_LOPKD);
-#ifndef WITH_FPC
     LOW(GPIO_MUXSEL_HIRAW);
     LOW(GPIO_MUXSEL_LORAW);
+    HIGH(whichGpio);
+#else
+    if ((whichGpio == GPIO_MUXSEL_LORAW) || (whichGpio == GPIO_MUXSEL_HIRAW))
+        return;
+    // FPC USART uses HIRAW/LOWRAW pins, so they are excluded here.
+    AT91C_BASE_PIOA->PIO_OER = GPIO_MUXSEL_HIPKD | GPIO_MUXSEL_LOPKD;
+    AT91C_BASE_PIOA->PIO_PER = GPIO_MUXSEL_HIPKD | GPIO_MUXSEL_LOPKD;
+    LOW(GPIO_MUXSEL_HIPKD);
+    LOW(GPIO_MUXSEL_LOPKD);
+    HIGH(whichGpio);
 #endif
 
-    HIGH(whichGpio);
 }
 
 void Fpga_print_status(void) {
-    Dbprintf("Currently loaded FPGA image");
+    DbpString(_BLUE_("Currently loaded FPGA image"));
     Dbprintf("  mode....................%s", fpga_version_information[downloaded_bitstream - 1]);
 }
 
@@ -483,7 +496,7 @@ int FpgaGetCurrent(void) {
 // if HF,  Disable SSC DMA
 // turn off trace and leds off.
 void switch_off(void) {
-    if (MF_DBGLEVEL > 3) Dbprintf("switch_off");
+    if (DBGLEVEL > 3) Dbprintf("switch_off");
     FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF);
     if (downloaded_bitstream == FPGA_BITSTREAM_HF)
         FpgaDisableSscDma();

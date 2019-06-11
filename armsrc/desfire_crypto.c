@@ -288,7 +288,6 @@ void *mifare_cryto_preprocess_data(desfiretag_t tag, void *data, size_t *nbytes,
 
 void *mifare_cryto_postprocess_data(desfiretag_t tag, void *data, size_t *nbytes, int communication_settings) {
     void *res = data;
-    size_t edl;
     void *edata = NULL;
     uint8_t first_cmac_byte = 0x00;
 
@@ -322,7 +321,7 @@ void *mifare_cryto_postprocess_data(desfiretag_t tag, void *data, size_t *nbytes
                             break;
                         }
 
-                        edl = enciphered_data_length(tag, *nbytes - 1, communication_settings);
+                        size_t edl = enciphered_data_length(tag, *nbytes - 1, communication_settings);
                         edata = malloc(edl);
 
                         memcpy(edata, data, *nbytes - 1);
@@ -441,7 +440,7 @@ void *mifare_cryto_postprocess_data(desfiretag_t tag, void *data, size_t *nbytes
             }
 
             do {
-                uint16_t crc16 = 0x00;
+                uint16_t crc_16 = 0x00;
                 uint32_t crc;
                 switch (DESFIRE(tag)->authentication_scheme) {
                     case AS_LEGACY:
@@ -450,7 +449,7 @@ void *mifare_cryto_postprocess_data(desfiretag_t tag, void *data, size_t *nbytes
                         //
 
 
-                        crc = crc16;
+                        crc = crc_16;
                         break;
                     case AS_NEW:
                         end_crc_pos = crc_pos + 4;

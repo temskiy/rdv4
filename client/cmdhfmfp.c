@@ -33,25 +33,24 @@ static const uint8_t DefaultKey[16] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
 
 static int CmdHelp(const char *Cmd);
 
-int CmdHFMFPInfo(const char *cmd) {
+static int CmdHFMFPInfo(const char *cmd) {
 
     if (cmd && strlen(cmd) > 0)
         PrintAndLogEx(WARNING, "command don't have any parameters.\n");
 
     // info about 14a part
-    CmdHF14AInfo("");
+    infoHF14A(false, false);
 
     // Mifare Plus info
-    UsbCommand c = {CMD_READER_ISO_14443a, {ISO14A_CONNECT | ISO14A_NO_DISCONNECT, 0, 0}};
-    SendCommand(&c);
+    SendCommandMIX(CMD_READER_ISO_14443a, ISO14A_CONNECT | ISO14A_NO_DISCONNECT, 0, 0, NULL, 0);
 
-    UsbCommand resp;
+    PacketResponseNG resp;
     WaitForResponse(CMD_ACK, &resp);
 
     iso14a_card_select_t card;
-    memcpy(&card, (iso14a_card_select_t *)resp.d.asBytes, sizeof(iso14a_card_select_t));
+    memcpy(&card, (iso14a_card_select_t *)resp.data.asBytes, sizeof(iso14a_card_select_t));
 
-    uint64_t select_status = resp.arg[0]; // 0: couldn't read, 1: OK, with ATS, 2: OK, no ATS, 3: proprietary Anticollision
+    uint64_t select_status = resp.oldarg[0]; // 0: couldn't read, 1: OK, with ATS, 2: OK, no ATS, 3: proprietary Anticollision
 
     if (select_status == 1 || select_status == 2) {
         PrintAndLogEx(NORMAL, "----------------------------------------------");
@@ -112,7 +111,7 @@ int CmdHFMFPInfo(const char *cmd) {
     return 0;
 }
 
-int CmdHFMFPWritePerso(const char *cmd) {
+static int CmdHFMFPWritePerso(const char *cmd) {
     uint8_t keyNum[64] = {0};
     int keyNumLen = 0;
     uint8_t key[64] = {0};
@@ -178,7 +177,7 @@ int CmdHFMFPWritePerso(const char *cmd) {
 
 uint16_t CardAddresses[] = {0x9000, 0x9001, 0x9002, 0x9003, 0x9004, 0xA000, 0xA001, 0xA080, 0xA081, 0xC000, 0xC001};
 
-int CmdHFMFPInitPerso(const char *cmd) {
+static int CmdHFMFPInitPerso(const char *cmd) {
     int res;
     uint8_t key[256] = {0};
     int keyLen = 0;
@@ -252,7 +251,7 @@ int CmdHFMFPInitPerso(const char *cmd) {
     return 0;
 }
 
-int CmdHFMFPCommitPerso(const char *cmd) {
+static int CmdHFMFPCommitPerso(const char *cmd) {
     CLIParserInit("hf mfp commitp",
                   "Executes Commit Perso command. Can be used in SL0 mode only.",
                   "Usage:\n\thf mfp commitp ->  \n");
@@ -293,7 +292,7 @@ int CmdHFMFPCommitPerso(const char *cmd) {
     return 0;
 }
 
-int CmdHFMFPAuth(const char *cmd) {
+static int CmdHFMFPAuth(const char *cmd) {
     uint8_t keyn[250] = {0};
     int keynlen = 0;
     uint8_t key[250] = {0};
@@ -331,7 +330,7 @@ int CmdHFMFPAuth(const char *cmd) {
     return MifareAuth4(NULL, keyn, key, true, false, verbose);
 }
 
-int CmdHFMFPRdbl(const char *cmd) {
+static int CmdHFMFPRdbl(const char *cmd) {
     uint8_t keyn[2] = {0};
     uint8_t key[250] = {0};
     int keylen = 0;
@@ -385,7 +384,7 @@ int CmdHFMFPRdbl(const char *cmd) {
     }
 
     if (blocksCount > 1 && mfIsSectorTrailer(blockn)) {
-        PrintAndLog("WARNING: trailer!");
+        PrintAndLogEx(WARNING, "WARNING: trailer!");
     }
 
     uint8_t sectorNum = mfSectorNum(blockn & 0xff);
@@ -443,7 +442,7 @@ int CmdHFMFPRdbl(const char *cmd) {
     return 0;
 }
 
-int CmdHFMFPRdsc(const char *cmd) {
+static int CmdHFMFPRdsc(const char *cmd) {
     uint8_t keyn[2] = {0};
     uint8_t key[250] = {0};
     int keylen = 0;
@@ -539,7 +538,7 @@ int CmdHFMFPRdsc(const char *cmd) {
     return 0;
 }
 
-int CmdHFMFPWrbl(const char *cmd) {
+static int CmdHFMFPWrbl(const char *cmd) {
     uint8_t keyn[2] = {0};
     uint8_t key[250] = {0};
     int keylen = 0;
@@ -641,7 +640,7 @@ int CmdHFMFPWrbl(const char *cmd) {
     return 0;
 }
 
-int CmdHFMFPMAD(const char *cmd) {
+static int CmdHFMFPMAD(const char *cmd) {
 
     CLIParserInit("hf mfp mad",
                   "Checks and prints Mifare Application Directory (MAD)",
@@ -735,7 +734,7 @@ int CmdHFMFPMAD(const char *cmd) {
     return 0;
 }
 
-int CmdHFMFPNDEF(const char *cmd) {
+static int CmdHFMFPNDEF(const char *cmd) {
 
     CLIParserInit("hf mfp ndef",
                   "Prints NFC Data Exchange Format (NDEF)",
@@ -840,27 +839,28 @@ int CmdHFMFPNDEF(const char *cmd) {
 }
 
 static command_t CommandTable[] = {
-    {"help",             CmdHelp,                 1, "This help"},
-    {"info",             CmdHFMFPInfo,            0, "Info about Mifare Plus tag"},
-    {"wrp",              CmdHFMFPWritePerso,      0, "Write Perso command"},
-    {"initp",            CmdHFMFPInitPerso,       0, "Fills all the card's keys"},
-    {"commitp",          CmdHFMFPCommitPerso,     0, "Move card to SL1 or SL3 mode"},
-    {"auth",             CmdHFMFPAuth,            0, "Authentication"},
-    {"rdbl",             CmdHFMFPRdbl,            0, "Read blocks"},
-    {"rdsc",             CmdHFMFPRdsc,            0, "Read sectors"},
-    {"wrbl",             CmdHFMFPWrbl,            0, "Write blocks"},
-    {"mad",              CmdHFMFPMAD,             0, "Checks and prints MAD"},
-    {"ndef",             CmdHFMFPNDEF,            0, "Prints NDEF records from card"},
+    {"help",             CmdHelp,                 AlwaysAvailable, "This help"},
+    {"info",             CmdHFMFPInfo,            IfPm3Iso14443a,  "Info about Mifare Plus tag"},
+    {"wrp",              CmdHFMFPWritePerso,      IfPm3Iso14443a,  "Write Perso command"},
+    {"initp",            CmdHFMFPInitPerso,       IfPm3Iso14443a,  "Fills all the card's keys"},
+    {"commitp",          CmdHFMFPCommitPerso,     IfPm3Iso14443a,  "Move card to SL1 or SL3 mode"},
+    {"auth",             CmdHFMFPAuth,            IfPm3Iso14443a,  "Authentication"},
+    {"rdbl",             CmdHFMFPRdbl,            IfPm3Iso14443a,  "Read blocks"},
+    {"rdsc",             CmdHFMFPRdsc,            IfPm3Iso14443a,  "Read sectors"},
+    {"wrbl",             CmdHFMFPWrbl,            IfPm3Iso14443a,  "Write blocks"},
+    {"mad",              CmdHFMFPMAD,             IfPm3Iso14443a,  "Checks and prints MAD"},
+    {"ndef",             CmdHFMFPNDEF,            IfPm3Iso14443a,  "Prints NDEF records from card"},
     {NULL,               NULL,                    0, NULL}
 };
 
-int CmdHFMFP(const char *Cmd) {
-    (void)WaitForResponseTimeout(CMD_ACK, NULL, 100);
-    CmdsParse(CommandTable, Cmd);
-    return 0;
-}
-
-int CmdHelp(const char *Cmd) {
+static int CmdHelp(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
     CmdsHelp(CommandTable);
     return 0;
 }
+
+int CmdHFMFP(const char *Cmd) {
+    (void)WaitForResponseTimeout(CMD_ACK, NULL, 100);
+    return CmdsParse(CommandTable, Cmd);
+}
+

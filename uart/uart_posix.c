@@ -67,18 +67,30 @@ typedef struct {
     term_info tiNew;  // Terminal info during the transaction
 } serial_port_unix;
 
-// Set time-out on 30 miliseconds
+// see pm3_cmd.h
 struct timeval timeout = {
-    .tv_sec  =     0, // 0 second
-    .tv_usec = 30000  // 30 000 micro seconds
+    .tv_sec  = 0, // 0 second
+    .tv_usec = UART_FPC_CLIENT_RX_TIMEOUT_MS * 1000
 };
 
-serial_port uart_open(const char *pcPortName) {
+uint32_t newtimeout_value = 0;
+bool newtimeout_pending = false;
+
+int uart_reconfigure_timeouts(uint32_t value) {
+    newtimeout_value = value;
+    newtimeout_pending = true;
+    return PM3_SUCCESS;
+}
+
+serial_port uart_open(const char *pcPortName, uint32_t speed) {
     serial_port_unix *sp = calloc(sizeof(serial_port_unix), sizeof(uint8_t));
     if (sp == 0) return INVALID_SERIAL_PORT;
 
+    // init timeouts
+    timeout.tv_usec = UART_FPC_CLIENT_RX_TIMEOUT_MS * 1000;
+
     if (memcmp(pcPortName, "tcp:", 4) == 0) {
-        struct addrinfo *addr, *rp;
+        struct addrinfo *addr = NULL, *rp;
         char *addrstr = strdup(pcPortName + 4);
 
         if (addrstr == NULL) {
@@ -87,10 +99,10 @@ serial_port uart_open(const char *pcPortName) {
             return INVALID_SERIAL_PORT;
         }
 
-        timeout.tv_usec = 300000;  // 300 000 micro seconds
+        timeout.tv_usec = UART_TCP_CLIENT_RX_TIMEOUT_MS * 1000;
 
         char *colon = strrchr(addrstr, ':');
-        char *portstr;
+        const char *portstr;
         if (colon) {
             portstr = colon + 1;
             *colon = '\0';
@@ -98,7 +110,13 @@ serial_port uart_open(const char *pcPortName) {
             portstr = "7901";
         }
 
-        int s = getaddrinfo(addrstr, portstr, NULL, &addr);
+        struct addrinfo info;
+
+        memset(&info, 0, sizeof(info));
+
+        info.ai_socktype = SOCK_STREAM;
+
+        int s = getaddrinfo(addrstr, portstr, &info, &addr);
         if (s != 0) {
             printf("Error: getaddrinfo: %s\n", gai_strerror(s));
             freeaddrinfo(addr);
@@ -141,7 +159,6 @@ serial_port uart_open(const char *pcPortName) {
         }
         return sp;
     }
-
 
     sp->fd = open(pcPortName, O_RDWR | O_NOCTTY | O_NDELAY | O_NONBLOCK);
     if (sp->fd == -1) {
@@ -194,23 +211,16 @@ serial_port uart_open(const char *pcPortName) {
     // Flush all lingering data that may exist
     tcflush(sp->fd, TCIOFLUSH);
 
-#ifdef WITH_FPC
-    if (uart_set_speed(sp, 115200)) {
-        printf("[=] UART Setting serial baudrate 115200 [FPC enabled]\n");
-    } else {
-        uart_set_speed(sp, 9600);
-        printf("[=] UART Setting serial baudrate 9600 [FPC enabled]\n");
+    if (!uart_set_speed(sp, speed)) {
+        // try fallback automatically
+        speed = 115200;
+        if (!uart_set_speed(sp, speed)) {
+            uart_close(sp);
+            printf("[!] UART error while setting baudrate\n");
+            return INVALID_SERIAL_PORT;
+        }
     }
-#else
-    // set speed, works for UBUNTU 14.04
-    bool success = uart_set_speed(sp, 460800);
-    if (success) {
-        printf("[=] UART Setting serial baudrate 460800\n");
-    } else {
-        uart_set_speed(sp, 115200);
-        printf("[=] UART Setting serial baudrate 115200\n");
-    }
-#endif
+    conn.uart_speed = uart_get_speed(sp);
     return sp;
 }
 
@@ -234,44 +244,48 @@ void uart_close(const serial_port sp) {
     free(sp);
 }
 
-bool uart_receive(const serial_port sp, uint8_t *pbtRx, size_t pszMaxRxLen, size_t *pszRxLen) {
-    int res;
-    int byteCount;
+int uart_receive(const serial_port sp, uint8_t *pbtRx, uint32_t pszMaxRxLen, uint32_t *pszRxLen) {
+    uint32_t byteCount;  // FIONREAD returns size on 32b
     fd_set rfds;
     struct timeval tv;
 
+    if (newtimeout_pending) {
+        timeout.tv_usec = newtimeout_value * 1000;
+        newtimeout_pending = false;
+    }
     // Reset the output count
     *pszRxLen = 0;
-
     do {
         // Reset file descriptor
         FD_ZERO(&rfds);
         FD_SET(((serial_port_unix *)sp)->fd, &rfds);
         tv = timeout;
-        res = select(((serial_port_unix *)sp)->fd + 1, &rfds, NULL, NULL, &tv);
+        int res = select(((serial_port_unix *)sp)->fd + 1, &rfds, NULL, NULL, &tv);
 
         // Read error
         if (res < 0) {
-            return false;
+            return PM3_EIO;
         }
 
         // Read time-out
         if (res == 0) {
             if (*pszRxLen == 0) {
-                // Error, we received no data
-                return false;
+                // We received no data
+                return PM3_ENODATA;
             } else {
                 // We received some data, but nothing more is available
-                return true;
+                return PM3_SUCCESS;
             }
         }
 
         // Retrieve the count of the incoming bytes
         res = ioctl(((serial_port_unix *)sp)->fd, FIONREAD, &byteCount);
-        if (res < 0) return false;
+//        printf("UART:: RX ioctl res %d byteCount %u\n", res, byteCount);
+        if (res < 0) return PM3_ENOTTY;
 
         // Cap the number of bytes, so we don't overrun the buffer
         if (pszMaxRxLen - (*pszRxLen) < byteCount) {
+//            printf("UART:: RX prevent overrun (have %u, need %u)\n", pszMaxRxLen - (*pszRxLen), byteCount);
             byteCount = pszMaxRxLen - (*pszRxLen);
         }
 
@@ -279,23 +293,23 @@ bool uart_receive(const serial_port sp, uint8_t *pbtRx, size_t pszMaxRxLen, size
         res = read(((serial_port_unix *)sp)->fd, pbtRx + (*pszRxLen), byteCount);
 
         // Stop if the OS has some troubles reading the data
-        if (res <= 0) return false;
+        if (res <= 0) {
+            return PM3_EIO;
+        }
 
         *pszRxLen += res;
 
         if (*pszRxLen == pszMaxRxLen) {
             // We have all the data we wanted.
-            return true;
+            return PM3_SUCCESS;
         }
-
     } while (byteCount);
 
-    return true;
+    return PM3_SUCCESS;
 }
 
-bool uart_send(const serial_port sp, const uint8_t *pbtTx, const size_t len) {
-    int32_t res;
-    size_t pos = 0;
+int uart_send(const serial_port sp, const uint8_t *pbtTx, const uint32_t len) {
+    uint32_t pos = 0;
     fd_set rfds;
     struct timeval tv;
 
@@ -304,29 +318,30 @@ bool uart_send(const serial_port sp, const uint8_t *pbtTx, const size_t len) {
         FD_ZERO(&rfds);
         FD_SET(((serial_port_unix *)sp)->fd, &rfds);
         tv = timeout;
-        res = select(((serial_port_unix *)sp)->fd + 1, NULL, &rfds, NULL, &tv);
+        int res = select(((serial_port_unix *)sp)->fd + 1, NULL, &rfds, NULL, &tv);
 
         // Write error
         if (res < 0) {
             printf("UART:: write error (%d)\n", res);
-            return false;
+            return PM3_ENOTTY;
         }
 
         // Write time-out
         if (res == 0) {
             printf("UART:: write time-out\n");
-            return false;
+            return PM3_ETIMEOUT;
         }
 
         // Send away the bytes
         res = write(((serial_port_unix *)sp)->fd, pbtTx + pos, len - pos);
 
         // Stop if the OS has some troubles sending the data
-        if (res <= 0) return false;
+        if (res <= 0)
+            return PM3_EIO;
 
         pos += res;
     }
-    return true;
+    return PM3_SUCCESS;
 }
 
 bool uart_set_speed(serial_port sp, const uint32_t uiPortSpeed) {
@@ -403,6 +418,12 @@ bool uart_set_speed(serial_port sp, const uint32_t uiPortSpeed) {
             stPortSpeed = B921600;
             break;
 #  endif
+#  ifdef B1382400
+        case 1382400:
+            stPortSpeed = B1382400;
+            break;
+#  endif
+
         default:
             return false;
     };
@@ -414,7 +435,10 @@ bool uart_set_speed(serial_port sp, const uint32_t uiPortSpeed) {
     // Set port speed (Input and Output)
     cfsetispeed(&ti, stPortSpeed);
     cfsetospeed(&ti, stPortSpeed);
-    return (tcsetattr(spu->fd, TCSANOW, &ti) != -1);
+    bool result = tcsetattr(spu->fd, TCSANOW, &ti) != -1;
+    if (result)
+        conn.uart_speed = uiPortSpeed;
+    return result;
 }
 
 uint32_t uart_get_speed(const serial_port sp) {

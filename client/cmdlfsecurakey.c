@@ -11,29 +11,19 @@
 
 static int CmdHelp(const char *Cmd);
 
-// by marshmellow
-// find Securakey preamble in already demoded data
-int detectSecurakey(uint8_t *dest, size_t *size) {
-    if (*size < 96) return -1; //make sure buffer has data
-    size_t startIdx = 0;
-    uint8_t preamble[] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1};
-    if (!preambleSearch(dest, preamble, sizeof(preamble), size, &startIdx))
-        return -2; //preamble not found
-    if (*size != 96) return -3; //wrong demoded size
-    //return start position
-    return (int)startIdx;
-}
-
 //see ASKDemod for what args are accepted
-int CmdSecurakeyDemod(const char *Cmd) {
+static int CmdSecurakeyDemod(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
 
     //ASK / Manchester
     bool st = false;
-    if (!ASKDemod_ext("40 0 0", false, false, 1, &st)) {
+    if (ASKDemod_ext("40 0 0", false, false, 1, &st) != PM3_SUCCESS) {
         PrintAndLogEx(DEBUG, "DEBUG: Error - Securakey: ASK/Manchester Demod failed");
-        return 0;
+        return PM3_ESOFT;
     }
-    if (st) return 0;
+    if (st)
+        return PM3_ESOFT;
+
     size_t size = DemodBufferLen;
     int ans = detectSecurakey(DemodBuffer, &size);
     if (ans < 0) {
@@ -45,9 +35,9 @@ int CmdSecurakeyDemod(const char *Cmd) {
             PrintAndLogEx(DEBUG, "DEBUG: Error - Securakey: Size not correct: %d", size);
         else
             PrintAndLogEx(DEBUG, "DEBUG: Error - Securakey: ans: %d", ans);
-        return 0;
+        return PM3_ESOFT;
     }
-    setDemodBuf(DemodBuffer, 96, ans);
+    setDemodBuff(DemodBuffer, 96, ans);
     setClockGrid(g_DemodClock, g_DemodStartIdx + (ans * g_DemodClock));
 
     //got a good demod
@@ -81,7 +71,7 @@ int CmdSecurakeyDemod(const char *Cmd) {
     uint32_t fc = 0, lWiegand = 0, rWiegand = 0;
     if (bitLen > 40) { //securakey's max bitlen is 40 bits...
         PrintAndLogEx(DEBUG, "DEBUG: Error bitLen too long: %u", bitLen);
-        return 0;
+        return PM3_ESOFT;
     }
     // get left 1/2 wiegand & right 1/2 wiegand (for parity test and wiegand print)
     lWiegand = bytebits_to_byte(bits_no_spacer + 48 - bitLen, bitLen / 2);
@@ -103,30 +93,48 @@ int CmdSecurakeyDemod(const char *Cmd) {
     PrintAndLogEx(INFO, "\nHow the FC translates to printed FC is unknown");
     PrintAndLogEx(INFO, "How the checksum is calculated is unknown");
     PrintAndLogEx(INFO, "Help the community identify this format further\n by sharing your tag on the pm3 forum or with forum members");
-    return 1;
+    return PM3_SUCCESS;
 }
 
-int CmdSecurakeyRead(const char *Cmd) {
+static int CmdSecurakeyRead(const char *Cmd) {
     lf_read(true, 8000);
     return CmdSecurakeyDemod(Cmd);
 }
 
 static command_t CommandTable[] = {
-    {"help",  CmdHelp,          1, "This help"},
-    {"demod", CmdSecurakeyDemod, 1, "Demodulate an Securakey tag from the GraphBuffer"},
-    {"read",  CmdSecurakeyRead, 0, "Attempt to read and extract tag data from the antenna"},
-    //{"clone", CmdSecurakeyClone,0, "clone Securakey tag"},
-    //{"sim",   CmdSecurakeydSim, 0, "simulate Securakey tag"},
-    {NULL, NULL, 0, NULL}
+    {"help",  CmdHelp,           AlwaysAvailable, "This help"},
+    {"demod", CmdSecurakeyDemod, AlwaysAvailable, "Demodulate an Securakey tag from the GraphBuffer"},
+    {"read",  CmdSecurakeyRead,  IfPm3Lf,         "Attempt to read and extract tag data from the antenna"},
+    //{"clone", CmdSecurakeyClone, IfPm3Lf,         "clone Securakey tag"},
+    //{"sim",   CmdSecurakeydSim,  IfPm3Lf,         "simulate Securakey tag"},
+    {NULL, NULL, NULL, NULL}
 };
+
+static int CmdHelp(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
+    CmdsHelp(CommandTable);
+    return PM3_SUCCESS;
+}
 
 int CmdLFSecurakey(const char *Cmd) {
     clearCommandBuffer();
-    CmdsParse(CommandTable, Cmd);
-    return 0;
+    return CmdsParse(CommandTable, Cmd);
 }
 
-int CmdHelp(const char *Cmd) {
-    CmdsHelp(CommandTable);
-    return 0;
+// by marshmellow
+// find Securakey preamble in already demoded data
+int detectSecurakey(uint8_t *dest, size_t *size) {
+    if (*size < 96) return -1; //make sure buffer has data
+    size_t startIdx = 0;
+    uint8_t preamble[] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1};
+    if (!preambleSearch(dest, preamble, sizeof(preamble), size, &startIdx))
+        return -2; //preamble not found
+    if (*size != 96) return -3; //wrong demoded size
+    //return start position
+    return (int)startIdx;
 }
+
+int demodSecurakey(void) {
+    return CmdSecurakeyDemod("");
+}
+

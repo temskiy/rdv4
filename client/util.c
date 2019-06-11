@@ -7,6 +7,12 @@
 //-----------------------------------------------------------------------------
 // utilities
 //-----------------------------------------------------------------------------
+
+// ensure gmtime_r is available even with -std=c99; must be included before
+#if !defined(_WIN32)
+#define _POSIX_C_SOURCE 200112L
+#endif
+
 #include "util.h"
 
 #define UTIL_BUFFER_SIZE_SPRINT 4097
@@ -58,7 +64,7 @@ int ukbhit(void) {
 // log files functions
 
 // open, appped and close logfile
-void AddLogLine(char *fn, char *data, char *c) {
+void AddLogLine(const char *fn, const char *data, const char *c) {
     FILE *f = NULL;
     char filename[FILE_PATH_SIZE] = {0x00};
     int len = 0;
@@ -70,7 +76,7 @@ void AddLogLine(char *fn, char *data, char *c) {
 
     f = fopen(filename, "a");
     if (!f) {
-        printf("Could not append log file %s", filename);
+        PrintAndLogEx(ERR, "Could not append log file" _YELLOW_("%s"), filename);
         return;
     }
 
@@ -80,24 +86,27 @@ void AddLogLine(char *fn, char *data, char *c) {
     fclose(f);
 }
 
-void AddLogHex(char *fn, char *extData, const uint8_t *data, const size_t len) {
+void AddLogHex(const char *fn, const char *extData, const uint8_t *data, const size_t len) {
     AddLogLine(fn, extData, sprint_hex(data, len));
 }
 
-void AddLogUint64(char *fn, char *data, const uint64_t value) {
+void AddLogUint64(const char *fn, const char *data, const uint64_t value) {
     char buf[20] = {0};
     memset(buf, 0x00, sizeof(buf));
     sprintf(buf, "%016" PRIx64 "", value);
     AddLogLine(fn, data, buf);
 }
 
-void AddLogCurrentDT(char *fn) {
-    char buf[20];
-    memset(buf, 0x00, sizeof(buf));
-    struct tm *curTime;
-    time_t now = time(0);
-    curTime = gmtime(&now);
-    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", curTime);
+void AddLogCurrentDT(const char *fn) {
+    char buf[20] = {0};
+    struct tm *ct, tm_buf;
+    time_t now = time(NULL);
+#if defined(_WIN32)
+    ct = gmtime_s(&tm_buf, &now) == 0 ? &tm_buf : NULL;
+#else
+    ct = gmtime_r(&now, &tm_buf);
+#endif
+    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", ct);
     AddLogLine(fn, "\nanticollision: ", buf);
 }
 
@@ -106,15 +115,12 @@ void AddLogCurrentDT(char *fn) {
 // param *uid  -  pointer to uid byte array
 // param *ext  -  ".log"
 // param uidlen - length of uid array.
-void FillFileNameByUID(char *filenamePrefix, uint8_t *uid, const char *ext, int uidlen) {
+void FillFileNameByUID(char *filenamePrefix, const uint8_t *uid, const char *ext, const int uidlen) {
     if (filenamePrefix == NULL || uid == NULL || ext == NULL) {
-        printf("[!] error parameter is NULL\n");
         return;
     }
 
-    int len = 0;
-    len = strlen(filenamePrefix);
-    //memset(fn, 0x00, FILE_PATH_SIZE);
+    int len = strlen(filenamePrefix);
 
     for (int j = 0; j < uidlen; j++)
         sprintf(filenamePrefix + len + j * 2, "%02X", uid[j]);
@@ -128,13 +134,13 @@ int FillBuffer(uint8_t *data, size_t maxDataLength, size_t *dataLength, ...) {
     va_start(valist, dataLength);
 
     uint8_t *vdata = NULL;
-    size_t vlength = 0;
+
     do {
         vdata = va_arg(valist, uint8_t *);
         if (!vdata)
             break;
 
-        vlength = va_arg(valist, size_t);
+        size_t vlength = va_arg(valist, size_t);
         if (*dataLength + vlength >  maxDataLength) {
             va_end(valist);
             return 1;
@@ -151,7 +157,7 @@ int FillBuffer(uint8_t *data, size_t maxDataLength, size_t *dataLength, ...) {
 }
 
 bool CheckStringIsHEXValue(const char *value) {
-    for (int i = 0; i < strlen(value); i++)
+    for (size_t i = 0; i < strlen(value); i++)
         if (!isxdigit(value[i]))
             return false;
 
@@ -168,17 +174,17 @@ void hex_to_buffer(const uint8_t *buf, const uint8_t *hex_data, const size_t hex
     size_t i;
     memset(tmp, 0x00, hex_max_len);
 
-    int maxLen = (hex_len > hex_max_len) ? hex_max_len : hex_len;
+    size_t maxLen = (hex_len > hex_max_len) ? hex_max_len : hex_len;
 
     for (i = 0; i < maxLen; ++i, tmp += 2 + spaces_between) {
         sprintf(tmp, (uppercase) ? "%02X" : "%02x", (unsigned int) hex_data[i]);
 
-        for (int j = 0; j < spaces_between; j++)
+        for (size_t j = 0; j < spaces_between; j++)
             sprintf(tmp + 2 + j, " ");
     }
 
     i *= (2 + spaces_between);
-    int minStrLen = min_str_len > i ? min_str_len : 0;
+    size_t minStrLen = min_str_len > i ? min_str_len : 0;
     if (minStrLen > hex_max_len)
         minStrLen = hex_max_len;
     for (; i < minStrLen; i++, tmp += 1)
@@ -189,8 +195,7 @@ void hex_to_buffer(const uint8_t *buf, const uint8_t *hex_data, const size_t hex
 
 // printing and converting functions
 void print_hex(const uint8_t *data, const size_t len) {
-    size_t i;
-    for (i = 0; i < len; i++)
+    for (size_t i = 0; i < len; i++)
         printf("%02x ", data[i]);
     printf("\n");
 }
@@ -198,7 +203,7 @@ void print_hex(const uint8_t *data, const size_t len) {
 void print_hex_break(const uint8_t *data, const size_t len, uint8_t breaks) {
     int rownum = 0;
     printf("[%02d] | ", rownum);
-    for (int i = 0; i < len; ++i) {
+    for (size_t i = 0; i < len; ++i) {
 
         printf("%02X ", data[i]);
 
@@ -237,7 +242,7 @@ char *sprint_bin_break(const uint8_t *data, const size_t len, const uint8_t brea
     // make sure we don't go beyond our char array memory
     size_t in_index = 0, out_index = 0;
 
-    int rowlen = (len > MAX_BIN_BREAK_LENGTH) ? MAX_BIN_BREAK_LENGTH : len;
+    size_t rowlen = (len > MAX_BIN_BREAK_LENGTH) ? MAX_BIN_BREAK_LENGTH : len;
 
     if (breaks > 0 && len % breaks != 0)
         rowlen = (len + (len / breaks) > MAX_BIN_BREAK_LENGTH) ? MAX_BIN_BREAK_LENGTH : len + (len / breaks);
@@ -256,12 +261,12 @@ char *sprint_bin_break(const uint8_t *data, const size_t len, const uint8_t brea
             sprintf(tmp++, ".");
         else
             sprintf(tmp++, "%u", data[in_index]);
+
         // check if a line break is needed and we have room to print it in our array
         if ((breaks > 0) && !((in_index + 1) % breaks) && (out_index + 1 != rowlen)) {
-            // increment and print line break
-            out_index++;
             sprintf(tmp++, "%s", "\n");
         }
+
         in_index++;
     }
 
@@ -342,7 +347,7 @@ char *sprint_ascii_ex(const uint8_t *data, const size_t len, const size_t min_st
         ++i;
     }
 
-    int m = min_str_len > i ? min_str_len : 0;
+    size_t m = min_str_len > i ? min_str_len : 0;
     for (; i < m; ++i)
         tmp[i] = ' ';
 
@@ -364,22 +369,6 @@ void print_blocks(uint32_t *data, size_t len) {
     }
 }
 
-void num_to_bytes(uint64_t n, size_t len, uint8_t *dest) {
-    while (len--) {
-        dest[len] = n & 0xFF;
-        n >>= 8;
-    }
-}
-
-uint64_t bytes_to_num(uint8_t *src, size_t len) {
-    uint64_t num = 0;
-    while (len--) {
-        num = (num << 8) | (*src);
-        src++;
-    }
-    return num;
-}
-
 // takes a number (uint64_t) and creates a binarray in dest.
 void num_to_bytebits(uint64_t n, size_t len, uint8_t *dest) {
     while (len--) {
@@ -390,7 +379,7 @@ void num_to_bytebits(uint64_t n, size_t len, uint8_t *dest) {
 
 //least significant bit first
 void num_to_bytebitsLSBF(uint64_t n, size_t len, uint8_t *dest) {
-    for (int i = 0 ; i < len ; ++i) {
+    for (size_t i = 0 ; i < len ; ++i) {
         dest[i] =  n & 1;
         n >>= 1;
     }
@@ -631,7 +620,7 @@ int param_getstr(const char *line, int paramnum, char *str, size_t buffersize) {
 
     // Prevent out of bounds errors
     if (en - bg + 1 >= buffersize) {
-        printf("out of bounds error: want %d bytes have %zu bytes\n", en - bg + 1 + 1, buffersize);
+        PrintAndLogEx(ERR, "out of bounds error: want %d bytes have %zu bytes\n", en - bg + 1 + 1, buffersize);
         return 0;
     }
 
@@ -650,12 +639,10 @@ https://github.com/ApertureLabsLtd/RFIDler/blob/master/firmware/Pic32/RFIDler.X/
 int hextobinarray(char *target, char *source) {
     int length, i, count = 0;
     char *start = source;
-    char x;
-
     length = strlen(source);
     // process 4 bits (1 hex digit) at a time
     while (length--) {
-        x = *(source++);
+        char x = *(source++);
         // capitalize
         if (x >= 'a' && x <= 'f')
             x -= 32;
@@ -753,15 +740,20 @@ void wiegand_add_parity(uint8_t *target, uint8_t *source, uint8_t length) {
     *(target) = GetParity(source + length / 2, ODD, length / 2);
 }
 
+// add HID parity to binary array: ODD prefix for 1st half of ID, EVEN suffix for 2nd half
+void wiegand_add_parity_swapped(uint8_t *target, uint8_t *source, uint8_t length) {
+    *(target++) = GetParity(source, ODD, length / 2);
+    memcpy(target, source, length);
+    target += length;
+    *(target) = GetParity(source + length / 2, EVEN, length / 2);
+}
+
 // xor two arrays together for len items.  The dst array contains the new xored values.
 void xor(unsigned char *dst, unsigned char *src, size_t len) {
     for (; len > 0; len--, dst++, src++)
         *dst ^= *src;
 }
 
-int32_t le24toh(uint8_t data[3]) {
-    return (data[2] << 16) | (data[1] << 8) | data[0];
-}
 // Pack a bitarray into a uint32_t.
 uint32_t PackBits(uint8_t start, uint8_t len, uint8_t *bits) {
 
@@ -777,16 +769,6 @@ uint32_t PackBits(uint8_t start, uint8_t len, uint8_t *bits) {
     return tmp;
 }
 
-// RotateLeft - Ultralight, Desfire, works on byte level
-// 00-01-02  >> 01-02-00
-void rol(uint8_t *data, const size_t len) {
-    uint8_t first = data[0];
-    for (size_t i = 0; i < len - 1; i++) {
-        data[i] = data[i + 1];
-    }
-    data[len - 1] = first;
-}
-
 /*
 uint8_t pw_rev_A(uint8_t b) {
     b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
@@ -795,81 +777,66 @@ uint8_t pw_rev_A(uint8_t b) {
     return b;
 }
 */
-uint8_t reflect8(uint8_t b) {
-    return ((b * 0x80200802ULL) & 0x0884422110ULL) * 0x0101010101ULL >> 32;
-}
-uint16_t reflect16(uint16_t b) {
-    uint16_t v = 0;
-    v |= (b & 0x8000) >> 15;
-    v |= (b & 0x4000) >> 13;
-    v |= (b & 0x2000) >> 11;
-    v |= (b & 0x1000) >> 9;
-    v |= (b & 0x0800) >> 7;
-    v |= (b & 0x0400) >> 5;
-    v |= (b & 0x0200) >> 3;
-    v |= (b & 0x0100) >> 1;
-
-    v |= (b & 0x0080) << 1;
-    v |= (b & 0x0040) << 3;
-    v |= (b & 0x0020) << 5;
-    v |= (b & 0x0010) << 7;
-    v |= (b & 0x0008) << 9;
-    v |= (b & 0x0004) << 11;
-    v |= (b & 0x0002) << 13;
-    v |= (b & 0x0001) << 15;
-    return v;
-}
-/*
- ref  http://www.csm.ornl.gov/~dunigan/crc.html
- Returns the value v with the bottom b [0,32] bits reflected.
- Example: reflect(0x3e23L,3) == 0x3e26
-*/
-uint32_t reflect(uint32_t v, int b) {
-    uint32_t t = v;
-    for (int i = 0; i < b; ++i) {
-        if (t & 1)
-            v |=  BITMASK((b - 1) - i);
-        else
-            v &= ~BITMASK((b - 1) - i);
-        t >>= 1;
-    }
-    return v;
-}
 
 uint64_t HornerScheme(uint64_t num, uint64_t divider, uint64_t factor) {
-    uint64_t remainder = 0, quotient = 0, result = 0;
-    remainder = num % divider;
+    uint64_t remaind = 0, quotient = 0, result = 0;
+    remaind = num % divider;
     quotient = num / divider;
-    if (!(quotient == 0 && remainder == 0))
-        result += HornerScheme(quotient, divider, factor) * factor + remainder;
+    if (!(quotient == 0 && remaind == 0))
+        result += HornerScheme(quotient, divider, factor) * factor + remaind;
     return result;
 }
 
 // determine number of logical CPU cores (use for multithreaded functions)
-extern int num_CPUs(void) {
+int num_CPUs(void) {
 #if defined(_WIN32)
 #include <sysinfoapi.h>
     SYSTEM_INFO sysinfo;
     GetSystemInfo(&sysinfo);
     return sysinfo.dwNumberOfProcessors;
-#elif defined(__linux__) || defined(__APPLE__)
+#elif defined(__linux__) && defined(_SC_NPROCESSORS_ONLN)
 #include <unistd.h>
-    return sysconf(_SC_NPROCESSORS_ONLN);
+    int count = sysconf(_SC_NPROCESSORS_ONLN);
+    if (count <= 0)
+        count = 1;
+    return count;
+#elif defined(__APPLE__)
+    /*
+       TODO ICEMAN 2019, its commented out until someone finds a better solution
+#include "sys/sysctl.h"
+        uint32_t logicalcores = 0;
+        size_t size = sizeof( logicalcores );
+        sysctlbyname( "hw.logicalcpu", &logicalcores, &size, NULL, 0 );
+        return logicalcores;
+        */
+    return 1;
 #else
     return 1;
 #endif
 }
 
-extern void str_lower(char *s) {
-    for (int i = 0; i < strlen(s); i++)
+void str_lower(char *s) {
+    for (size_t i = 0; i < strlen(s); i++)
         s[i] = tolower(s[i]);
 }
-extern bool str_startswith(const char *s,  const char *pre) {
+
+// check for prefix in string
+bool str_startswith(const char *s,  const char *pre) {
     return strncmp(pre, s, strlen(pre)) == 0;
 }
 
+// check for suffix in string
+bool str_endswith(const char *s,  const char *suffix) {
+    size_t ls = strlen(s);
+    size_t lsuffix = strlen(suffix);
+    if (ls >= lsuffix) {
+        return strncmp(suffix, s + (ls - lsuffix), lsuffix) == 0;
+    }
+    return false;
+}
+
 // Replace unprintable characters with a dot in char buffer
-extern void clean_ascii(unsigned char *buf, size_t len) {
+void clean_ascii(unsigned char *buf, size_t len) {
     for (size_t i = 0; i < len; i++) {
         if (!isprint(buf[i]))
             buf[i] = '.';
@@ -877,20 +844,20 @@ extern void clean_ascii(unsigned char *buf, size_t len) {
 }
 
 // replace \r \n to \0
-extern void strcleanrn(char *buf, size_t len) {
+void strcleanrn(char *buf, size_t len) {
     strcreplace(buf, len, '\n', '\0');
     strcreplace(buf, len, '\r', '\0');
 }
 
 // replace char in buffer
-extern void strcreplace(char *buf, size_t len, char from, char to) {
+void strcreplace(char *buf, size_t len, char from, char to) {
     for (size_t i = 0; i < len; i++) {
         if (buf[i] == from)
             buf[i] = to;
     }
 }
 
-extern char *strmcopy(char *buf) {
+char *strmcopy(const char *buf) {
     char *str = (char *) calloc(strlen(buf) + 1, sizeof(uint8_t));
     if (str != NULL) {
         memset(str, 0, strlen(buf) + 1);

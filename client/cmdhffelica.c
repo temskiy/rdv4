@@ -11,7 +11,7 @@
 
 static int CmdHelp(const char *Cmd);
 
-int usage_hf_felica_sim(void) {
+static int usage_hf_felica_sim(void) {
     PrintAndLogEx(NORMAL, "\n Emulating ISO/18092 FeliCa tag \n");
     PrintAndLogEx(NORMAL, "Usage: hf felica sim [h] t <type> [v]");
     PrintAndLogEx(NORMAL, "Options:");
@@ -23,7 +23,7 @@ int usage_hf_felica_sim(void) {
     PrintAndLogEx(NORMAL, "          hf felica sim t 1 ");
     return 0;
 }
-int usage_hf_felica_sniff(void) {
+static int usage_hf_felica_sniff(void) {
     PrintAndLogEx(NORMAL, "It get data from the field and saves it into command buffer.");
     PrintAndLogEx(NORMAL, "Buffer accessible from command 'hf list felica'");
     PrintAndLogEx(NORMAL, "Usage:  hf felica sniff <s > <t>");
@@ -33,7 +33,7 @@ int usage_hf_felica_sniff(void) {
     PrintAndLogEx(NORMAL, "          hf felica sniff s 1000");
     return 0;
 }
-int usage_hf_felica_simlite(void) {
+static int usage_hf_felica_simlite(void) {
     PrintAndLogEx(NORMAL, "\n Emulating ISO/18092 FeliCa Lite tag \n");
     PrintAndLogEx(NORMAL, "Usage: hf felica litesim [h] u <uid>");
     PrintAndLogEx(NORMAL, "Options:");
@@ -43,7 +43,7 @@ int usage_hf_felica_simlite(void) {
     PrintAndLogEx(NORMAL, "          hf felica litesim 11223344556677");
     return 0;
 }
-int usage_hf_felica_dumplite(void) {
+static int usage_hf_felica_dumplite(void) {
     PrintAndLogEx(NORMAL, "\n Dump ISO/18092 FeliCa Lite tag \n");
     PrintAndLogEx(NORMAL, "press button to abort run, otherwise it will loop for 200sec.");
     PrintAndLogEx(NORMAL, "Usage: hf felica litedump [h]");
@@ -53,7 +53,7 @@ int usage_hf_felica_dumplite(void) {
     PrintAndLogEx(NORMAL, "          hf felica litedump");
     return 0;
 }
-int usage_hf_felica_raw(void) {
+static int usage_hf_felica_raw(void) {
     PrintAndLogEx(NORMAL, "Usage: hf felica raw [-h] [-r] [-c] [-p] [-a] <0A 0B 0C ... hex>");
     PrintAndLogEx(NORMAL, "       -h    this help");
     PrintAndLogEx(NORMAL, "       -r    do not read response");
@@ -64,65 +64,21 @@ int usage_hf_felica_raw(void) {
     return 0;
 }
 
-int CmdHFFelicaList(const char *Cmd) {
+static int CmdHFFelicaList(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
     //PrintAndLogEx(NORMAL, "Deprecated command, use 'hf list felica' instead");
     CmdTraceList("felica");
     return 0;
 }
 
-int CmdHFFelicaReader(const char *Cmd) {
-    bool silent = (Cmd[0] == 's' || Cmd[0] ==  'S');
-    //UsbCommand cDisconnect = {CMD_FELICA_COMMAND, {0,0,0}};
-    UsbCommand c = {CMD_FELICA_COMMAND, {FELICA_CONNECT, 0, 0}};
-    clearCommandBuffer();
-    SendCommand(&c);
-    UsbCommand resp;
-    if (!WaitForResponseTimeout(CMD_ACK, &resp, 2500)) {
-        if (!silent) PrintAndLogEx(WARNING, "FeliCa card select failed");
-        //SendCommand(&cDisconnect);
-        return 0;
-    }
-
-    felica_card_select_t card;
-    memcpy(&card, (felica_card_select_t *)resp.d.asBytes, sizeof(felica_card_select_t));
-    uint64_t status = resp.arg[0];
-
-    switch (status) {
-        case 1: {
-            if (!silent)
-                PrintAndLogEx(WARNING, "card timeout");
-            break;
-        }
-        case 2: {
-            if (!silent)
-                PrintAndLogEx(WARNING, "card answered wrong");
-            break;
-        }
-        case 3: {
-            if (!silent)
-                PrintAndLogEx(WARNING, "CRC check failed");
-            break;
-        }
-        case 0: {
-            PrintAndLogEx(SUCCESS, "FeliCa tag info");
-
-            PrintAndLogEx(NORMAL, "IDm  %s", sprint_hex(card.IDm, sizeof(card.IDm)));
-            PrintAndLogEx(NORMAL, "  - CODE    %s", sprint_hex(card.code, sizeof(card.code)));
-            PrintAndLogEx(NORMAL, "  - NFCID2  %s", sprint_hex(card.uid, sizeof(card.uid)));
-
-            PrintAndLogEx(NORMAL, "Parameter (PAD) | %s", sprint_hex(card.PMm, sizeof(card.PMm)));
-            PrintAndLogEx(NORMAL, "  - IC CODE %s", sprint_hex(card.iccode, sizeof(card.iccode)));
-            PrintAndLogEx(NORMAL, "  - MRT     %s", sprint_hex(card.mrt, sizeof(card.mrt)));
-
-            PrintAndLogEx(NORMAL, "SERVICE CODE %s", sprint_hex(card.servicecode, sizeof(card.servicecode)));
-            break;
-        }
-    }
-    return status;
+static int CmdHFFelicaReader(const char *Cmd) {
+    bool verbose = !(Cmd[0] == 's' || Cmd[0] ==  'S');
+    readFelicaUid(verbose);
+    return 0;
 }
 
 // simulate iso18092 / FeliCa tag
-int CmdHFFelicaSim(const char *Cmd) {
+static int CmdHFFelicaSim(const char *Cmd) {
     bool errors = false;
     uint8_t flags = 0;
     uint8_t tagtype = 1;
@@ -172,11 +128,9 @@ int CmdHFFelicaSim(const char *Cmd) {
     //Validations
     if (errors || cmdp == 0) return usage_hf_felica_sim();
 
-    UsbCommand c = {CMD_FELICA_SIMULATE_TAG, { tagtype, flags, 0 }};
-    memcpy(c.d.asBytes, uid, uidlen >> 1);
     clearCommandBuffer();
-    SendCommand(&c);
-    UsbCommand resp;
+    SendCommandOLD(CMD_FELICA_SIMULATE_TAG,  tagtype, flags, 0, uid, uidlen >> 1);
+    PacketResponseNG resp;
 
     if (verbose)
         PrintAndLogEx(NORMAL, "Press pm3-button to abort simulation");
@@ -187,7 +141,7 @@ int CmdHFFelicaSim(const char *Cmd) {
     return 0;
 }
 
-int CmdHFFelicaSniff(const char *Cmd) {
+static int CmdHFFelicaSniff(const char *Cmd) {
 
     uint8_t cmdp = 0;
     uint64_t samples2skip = 0;
@@ -218,23 +172,21 @@ int CmdHFFelicaSniff(const char *Cmd) {
     //Validations
     if (errors || cmdp == 0) return usage_hf_felica_sniff();
 
-    UsbCommand c = {CMD_FELICA_SNIFF, {samples2skip, triggers2skip, 0}};
     clearCommandBuffer();
-    SendCommand(&c);
+    SendCommandMIX(CMD_FELICA_SNIFF, samples2skip, triggers2skip, 0, NULL, 0);
     return 0;
 }
 
 // uid  hex
-int CmdHFFelicaSimLite(const char *Cmd) {
+static int CmdHFFelicaSimLite(const char *Cmd) {
 
     uint64_t uid = param_get64ex(Cmd, 0, 0, 16);
 
     if (!uid)
         return usage_hf_felica_simlite();
 
-    UsbCommand c = {CMD_FELICA_LITE_SIM, {uid, 0, 0} };
     clearCommandBuffer();
-    SendCommand(&c);
+    SendCommandMIX(CMD_FELICA_LITE_SIM, uid, 0, 0, NULL, 0);
     return 0;
 }
 
@@ -242,7 +194,7 @@ static void printSep() {
     PrintAndLogEx(NORMAL, "------------------------------------------------------------------------------------");
 }
 
-uint16_t PrintFliteBlock(uint16_t tracepos, uint8_t *trace, uint16_t tracelen) {
+static uint16_t PrintFliteBlock(uint16_t tracepos, uint8_t *trace, uint16_t tracelen) {
     if (tracepos + 19 >= tracelen)
         return tracelen;
 
@@ -389,17 +341,16 @@ uint16_t PrintFliteBlock(uint16_t tracepos, uint8_t *trace, uint16_t tracelen) {
     return tracepos + 19;
 }
 
-int CmdHFFelicaDumpLite(const char *Cmd) {
+static int CmdHFFelicaDumpLite(const char *Cmd) {
 
     char ctmp = tolower(param_getchar(Cmd, 0));
     if (ctmp == 'h') return usage_hf_felica_dumplite();
 
     PrintAndLogEx(SUCCESS, "FeliCa lite - dump started");
     PrintAndLogEx(SUCCESS, "press pm3-button to cancel");
-    UsbCommand c = {CMD_FELICA_LITE_DUMP, {0, 0, 0}};
     clearCommandBuffer();
-    SendCommand(&c);
-    UsbCommand resp;
+    SendCommandNG(CMD_FELICA_LITE_DUMP, NULL, 0);
+    PacketResponseNG resp;
 
     uint8_t timeout = 0;
     while (!WaitForResponseTimeout(CMD_ACK, &resp, 2000)) {
@@ -419,14 +370,14 @@ int CmdHFFelicaDumpLite(const char *Cmd) {
             return 1;
         }
     }
-    if (resp.arg[0] == 0) {
+    if (resp.oldarg[0] == 0) {
         PrintAndLogEx(WARNING, "\nButton pressed. Aborted.");
         return 1;
     }
 
-    uint64_t tracelen = resp.arg[1];
-    if (tracelen == 0) 
-        return 1;   
+    uint64_t tracelen = resp.oldarg[1];
+    if (tracelen == 0)
+        return 1;
 
     uint8_t *trace = calloc(tracelen, sizeof(uint8_t));
     if (trace == NULL) {
@@ -444,19 +395,32 @@ int CmdHFFelicaDumpLite(const char *Cmd) {
 
     print_hex_break(trace, tracelen, 32);
     printSep();
-    
+
     uint16_t tracepos = 0;
     while (tracepos < tracelen)
         tracepos = PrintFliteBlock(tracepos, trace, tracelen);
 
     printSep();
 
-    free(trace);        
+    free(trace);
     return 0;
 }
 
-int CmdHFFelicaCmdRaw(const char *Cmd) {
-    UsbCommand c = {CMD_FELICA_COMMAND, {0, 0, 0}};
+static void waitCmdFelica(uint8_t iSelect) {
+    PacketResponseNG resp;
+
+    if (WaitForResponseTimeout(CMD_ACK, &resp, 2000)) {
+        uint16_t len = iSelect ? (resp.oldarg[1] & 0xffff) : (resp.oldarg[0]  & 0xffff);
+        PrintAndLogEx(NORMAL, "received %i octets", len);
+        if (!len)
+            return;
+        PrintAndLogEx(NORMAL, "%s", sprint_hex(resp.data.asBytes, len));
+    } else {
+        PrintAndLogEx(WARNING, "timeout while waiting for reply.");
+    }
+}
+
+static int CmdHFFelicaCmdRaw(const char *Cmd) {
     bool reply = 1;
     bool crc = false;
     bool power = false;
@@ -465,7 +429,7 @@ int CmdHFFelicaCmdRaw(const char *Cmd) {
     uint16_t numbits = 0;
     char buf[5] = "";
     int i = 0;
-    uint8_t data[USB_CMD_DATA_SIZE];
+    uint8_t data[PM3_CMD_DATA_SIZE];
     uint16_t datalen = 0;
     uint32_t temp;
 
@@ -539,28 +503,26 @@ int CmdHFFelicaCmdRaw(const char *Cmd) {
         data[datalen++] = b2;
     }
 
+    uint8_t flags = 0;
     if (active || active_select) {
-        c.arg[0] |= FELICA_CONNECT;
+        flags |= FELICA_CONNECT;
         if (active)
-            c.arg[0] |= FELICA_NO_SELECT;
+            flags |= FELICA_NO_SELECT;
     }
 
     if (power) {
-        c.arg[0] |= FELICA_NO_DISCONNECT;
+        flags |= FELICA_NO_DISCONNECT;
     }
 
     if (datalen > 0) {
-        c.arg[0] |= FELICA_RAW;
+        flags |= FELICA_RAW;
     }
 
-    // Max buffer is USB_CMD_DATA_SIZE
-    datalen = (datalen > USB_CMD_DATA_SIZE) ? USB_CMD_DATA_SIZE : datalen;
-
-    c.arg[1] = (datalen & 0xFFFF) | (uint32_t)(numbits << 16);
-    memcpy(c.d.asBytes, data, datalen);
+    // Max buffer is PM3_CMD_DATA_SIZE
+    datalen = (datalen > PM3_CMD_DATA_SIZE) ? PM3_CMD_DATA_SIZE : datalen;
 
     clearCommandBuffer();
-    SendCommand(&c);
+    SendCommandOLD(CMD_FELICA_COMMAND, flags, (datalen & 0xFFFF) | (uint32_t)(numbits << 16), 0, data, datalen);
 
     if (reply) {
         if (active_select)
@@ -571,41 +533,75 @@ int CmdHFFelicaCmdRaw(const char *Cmd) {
     return 0;
 }
 
-void waitCmdFelica(uint8_t iSelect) {
-    UsbCommand resp;
-    uint16_t len = 0;
-
-    if (WaitForResponseTimeout(CMD_ACK, &resp, 2000)) {
-        len = iSelect ? (resp.arg[1] & 0xffff) : (resp.arg[0]  & 0xffff);
-        PrintAndLogEx(NORMAL, "received %i octets", len);
-        if (!len)
-            return;
-        PrintAndLogEx(NORMAL, "%s", sprint_hex(resp.d.asBytes, len));
-    } else {
-        PrintAndLogEx(WARNING, "timeout while waiting for reply.");
-    }
-}
-
 static command_t CommandTable[] = {
-    {"help",      CmdHelp,              1, "This help"},
-    {"list",      CmdHFFelicaList,      0, "[Deprecated] List ISO 18092/FeliCa history"},
-    {"reader",    CmdHFFelicaReader,    0, "Act like an ISO18092/FeliCa reader"},
-    {"sim",       CmdHFFelicaSim,       0, "<UID> -- Simulate ISO 18092/FeliCa tag"},
-    {"sniff",     CmdHFFelicaSniff,     0, "sniff ISO 18092/Felica traffic"},
-    {"raw",       CmdHFFelicaCmdRaw,    0, "Send raw hex data to tag"},
+    {"help",      CmdHelp,              AlwaysAvailable, "This help"},
+    {"list",      CmdHFFelicaList,      AlwaysAvailable,     "List ISO 18092/FeliCa history"},
+    {"reader",    CmdHFFelicaReader,    IfPm3Felica,     "Act like an ISO18092/FeliCa reader"},
+    {"sim",       CmdHFFelicaSim,       IfPm3Felica,     "<UID> -- Simulate ISO 18092/FeliCa tag"},
+    {"sniff",     CmdHFFelicaSniff,     IfPm3Felica,     "sniff ISO 18092/Felica traffic"},
+    {"raw",       CmdHFFelicaCmdRaw,    IfPm3Felica,     "Send raw hex data to tag"},
 
-    {"litesim",   CmdHFFelicaSimLite,   0, "<NDEF2> - only reply to poll request"},
-    {"litedump",  CmdHFFelicaDumpLite,  0, "Wait for and try dumping FelicaLite"},
-    {NULL, NULL, 0, NULL}
+    {"litesim",   CmdHFFelicaSimLite,   IfPm3Felica,     "<NDEF2> - only reply to poll request"},
+    {"litedump",  CmdHFFelicaDumpLite,  IfPm3Felica,     "Wait for and try dumping FelicaLite"},
+    {NULL, NULL, NULL, NULL}
 };
+
+static int CmdHelp(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
+    CmdsHelp(CommandTable);
+    return 0;
+}
 
 int CmdHFFelica(const char *Cmd) {
     clearCommandBuffer();
-    CmdsParse(CommandTable, Cmd);
-    return 0;
+    return CmdsParse(CommandTable, Cmd);
 }
 
-int CmdHelp(const char *Cmd) {
-    CmdsHelp(CommandTable);
-    return 0;
+int readFelicaUid(bool verbose) {
+
+    clearCommandBuffer();
+    SendCommandMIX(CMD_FELICA_COMMAND, FELICA_CONNECT, 0, 0, NULL, 0);
+    PacketResponseNG resp;
+    if (!WaitForResponseTimeout(CMD_ACK, &resp, 2500)) {
+        if (verbose) PrintAndLogEx(WARNING, "FeliCa card select failed");
+        //SendCommandMIX(CMD_FELICA_COMMAND, 0, 0, 0, NULL, 0);
+        return 0;
+    }
+
+    felica_card_select_t card;
+    memcpy(&card, (felica_card_select_t *)resp.data.asBytes, sizeof(felica_card_select_t));
+    uint64_t status = resp.oldarg[0];
+
+    switch (status) {
+        case 1: {
+            if (verbose)
+                PrintAndLogEx(WARNING, "card timeout");
+            break;
+        }
+        case 2: {
+            if (verbose)
+                PrintAndLogEx(WARNING, "card answered wrong");
+            break;
+        }
+        case 3: {
+            if (verbose)
+                PrintAndLogEx(WARNING, "CRC check failed");
+            break;
+        }
+        case 0: {
+            PrintAndLogEx(SUCCESS, "FeliCa tag info");
+
+            PrintAndLogEx(NORMAL, "IDm  %s", sprint_hex(card.IDm, sizeof(card.IDm)));
+            PrintAndLogEx(NORMAL, "  - CODE    %s", sprint_hex(card.code, sizeof(card.code)));
+            PrintAndLogEx(NORMAL, "  - NFCID2  %s", sprint_hex(card.uid, sizeof(card.uid)));
+
+            PrintAndLogEx(NORMAL, "Parameter (PAD) | %s", sprint_hex(card.PMm, sizeof(card.PMm)));
+            PrintAndLogEx(NORMAL, "  - IC CODE %s", sprint_hex(card.iccode, sizeof(card.iccode)));
+            PrintAndLogEx(NORMAL, "  - MRT     %s", sprint_hex(card.mrt, sizeof(card.mrt)));
+
+            PrintAndLogEx(NORMAL, "SERVICE CODE %s", sprint_hex(card.servicecode, sizeof(card.servicecode)));
+            break;
+        }
+    }
+    return status;
 }

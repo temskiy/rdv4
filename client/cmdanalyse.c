@@ -11,7 +11,7 @@
 
 static int CmdHelp(const char *Cmd);
 
-int usage_analyse_lcr(void) {
+static int usage_analyse_lcr(void) {
     PrintAndLogEx(NORMAL, "Specifying the bytes of a UID with a known LRC will find the last byte value");
     PrintAndLogEx(NORMAL, "needed to generate that LRC with a rolling XOR. All bytes should be specified in HEX.");
     PrintAndLogEx(NORMAL, "");
@@ -25,7 +25,7 @@ int usage_analyse_lcr(void) {
     PrintAndLogEx(NORMAL, "expected output: Target (BA) requires final LRC XOR byte value: 5A");
     return 0;
 }
-int usage_analyse_checksum(void) {
+static int usage_analyse_checksum(void) {
     PrintAndLogEx(NORMAL, "The bytes will be added with eachother and than limited with the applied mask");
     PrintAndLogEx(NORMAL, "Finally compute ones' complement of the least significant bytes");
     PrintAndLogEx(NORMAL, "");
@@ -41,7 +41,7 @@ int usage_analyse_checksum(void) {
     PrintAndLogEx(NORMAL, "expected output: 0x61");
     return 0;
 }
-int usage_analyse_crc(void) {
+static int usage_analyse_crc(void) {
     PrintAndLogEx(NORMAL, "A stub method to test different crc implementations inside the PM3 sourcecode. Just because you figured out the poly, doesn't mean you get the desired output");
     PrintAndLogEx(NORMAL, "");
     PrintAndLogEx(NORMAL, "Usage:  analyse crc [h] <bytes>");
@@ -53,7 +53,7 @@ int usage_analyse_crc(void) {
     PrintAndLogEx(NORMAL, "      analyse crc 137AF00A0A0D");
     return 0;
 }
-int usage_analyse_nuid(void) {
+static int usage_analyse_nuid(void) {
     PrintAndLogEx(NORMAL, "Generate 4byte NUID from 7byte UID");
     PrintAndLogEx(NORMAL, "");
     PrintAndLogEx(NORMAL, "Usage:  analyse hid [h] <bytes>");
@@ -65,7 +65,7 @@ int usage_analyse_nuid(void) {
     PrintAndLogEx(NORMAL, "      analyse nuid 11223344556677");
     return 0;
 }
-int usage_analyse_a(void) {
+static int usage_analyse_a(void) {
     PrintAndLogEx(NORMAL, "Iceman's personal garbage test command");
     PrintAndLogEx(NORMAL, "");
     PrintAndLogEx(NORMAL, "Usage:  analyse a [h] d <bytes>");
@@ -220,12 +220,9 @@ static uint16_t calcBSDchecksum4(uint8_t *bytes, uint8_t len, uint32_t mask) {
 }
 
 // measuring LFSR maximum length
-int CmdAnalyseLfsr(const char *Cmd) {
+static int CmdAnalyseLfsr(const char *Cmd) {
 
-    uint16_t start_state = 0;  /* Any nonzero start state will work. */
-    uint16_t lfsr = start_state;
-    //uint32_t period = 0;
-
+    uint16_t lfsr;  /* Any nonzero start state will work. */
     uint8_t iv = param_get8ex(Cmd, 0, 0, 16);
     uint8_t find = param_get8ex(Cmd, 1, 0, 16);
 
@@ -233,16 +230,14 @@ int CmdAnalyseLfsr(const char *Cmd) {
     PrintAndLogEx(NORMAL, " bit# | lfsr | ^0x40 |  0x%02X ^ lfsr \n", find);
 
     for (uint8_t i = 0x01; i < 0x30; i += 1) {
-        //period = 0;
         legic_prng_init(iv);
         legic_prng_forward(i);
         lfsr = legic_prng_get_bits(12);
-
         PrintAndLogEx(NORMAL, " %02X | %03X | %03X | %03X \n", i, lfsr, 0x40 ^ lfsr, find ^ lfsr);
     }
     return 0;
 }
-int CmdAnalyseLCR(const char *Cmd) {
+static int CmdAnalyseLCR(const char *Cmd) {
     uint8_t data[50];
     char cmdp = tolower(param_getchar(Cmd, 0));
     if (strlen(Cmd) == 0 || cmdp == 'h') return usage_analyse_lcr();
@@ -263,7 +258,7 @@ int CmdAnalyseLCR(const char *Cmd) {
     PrintAndLogEx(NORMAL, "Target [%02X] requires final LRC XOR byte value: 0x%02X", data[len - 1], finalXor);
     return 0;
 }
-int CmdAnalyseCRC(const char *Cmd) {
+static int CmdAnalyseCRC(const char *Cmd) {
 
     char cmdp = tolower(param_getchar(Cmd, 0));
     if (strlen(Cmd) == 0 || cmdp == 'h') return usage_analyse_crc();
@@ -300,7 +295,7 @@ int CmdAnalyseCRC(const char *Cmd) {
     // ISO14443 crc B
     compute_crc(CRC_14443_B, data, len, &b1, &b2);
     uint16_t crcBB_1 = b1 << 8 | b2;
-    uint16_t bbb = crc(CRC_14443_B, data, len);
+    uint16_t bbb = Crc16ex(CRC_14443_B, data, len);
     PrintAndLogEx(NORMAL, "ISO14443 crc B  | %04x == %04x \n", crcBB_1, bbb);
 
 
@@ -321,45 +316,45 @@ int CmdAnalyseCRC(const char *Cmd) {
     PrintAndLogEx(NORMAL, "CRC16 based\n\n");
 
     // input from commandline
-    PrintAndLogEx(NORMAL, "CCITT  | %X (29B1 expected)", crc(CRC_CCITT, dataStr, sizeof(dataStr)));
+    PrintAndLogEx(NORMAL, "CCITT  | %X (29B1 expected)", Crc16ex(CRC_CCITT, dataStr, sizeof(dataStr)));
 
     uint8_t poll[] = {0xb2, 0x4d, 0x12, 0x01, 0x01, 0x2e, 0x3d, 0x17, 0x26, 0x47, 0x80, 0x95, 0x00, 0xf1, 0x00, 0x00, 0x00, 0x01, 0x43, 0x00, 0xb3, 0x7f};
-    PrintAndLogEx(NORMAL, "FeliCa | %04X (B37F expected)", crc(CRC_FELICA, poll + 2, sizeof(poll) - 4));
-    PrintAndLogEx(NORMAL, "FeliCa | %04X (0000 expected)", crc(CRC_FELICA, poll + 2, sizeof(poll) - 2));
+    PrintAndLogEx(NORMAL, "FeliCa | %04X (B37F expected)", Crc16ex(CRC_FELICA, poll + 2, sizeof(poll) - 4));
+    PrintAndLogEx(NORMAL, "FeliCa | %04X (0000 expected)", Crc16ex(CRC_FELICA, poll + 2, sizeof(poll) - 2));
 
     uint8_t sel_corr[] = { 0x40, 0xe1, 0xe1, 0xff, 0xfe, 0x5f, 0x02, 0x3c, 0x43, 0x01};
-    PrintAndLogEx(NORMAL, "iCLASS | %04x (0143 expected)", crc(CRC_ICLASS, sel_corr, sizeof(sel_corr) - 2));
+    PrintAndLogEx(NORMAL, "iCLASS | %04x (0143 expected)", Crc16ex(CRC_ICLASS, sel_corr, sizeof(sel_corr) - 2));
     PrintAndLogEx(NORMAL, "---------------------------------------------------------------\n\n\n");
 
     // ISO14443 crc A
     compute_crc(CRC_14443_A, dataStr, sizeof(dataStr), &b1, &b2);
     uint16_t crcAA = b1 << 8 | b2;
-    PrintAndLogEx(NORMAL, "ISO14443 crc A  | %04x or %04x (BF05 expected)\n", crcAA, crc(CRC_14443_A, dataStr, sizeof(dataStr)));
+    PrintAndLogEx(NORMAL, "ISO14443 crc A  | %04x or %04x (BF05 expected)\n", crcAA, Crc16ex(CRC_14443_A, dataStr, sizeof(dataStr)));
 
     // ISO14443 crc B
     compute_crc(CRC_14443_B, dataStr, sizeof(dataStr), &b1, &b2);
     uint16_t crcBB = b1 << 8 | b2;
-    PrintAndLogEx(NORMAL, "ISO14443 crc B  | %04x or %04x (906E expected)\n", crcBB, crc(CRC_14443_B, dataStr, sizeof(dataStr)));
+    PrintAndLogEx(NORMAL, "ISO14443 crc B  | %04x or %04x (906E expected)\n", crcBB, Crc16ex(CRC_14443_B, dataStr, sizeof(dataStr)));
 
     // ISO15693 crc  (x.25)
     compute_crc(CRC_15693, dataStr, sizeof(dataStr), &b1, &b2);
     uint16_t crcCC = b1 << 8 | b2;
-    PrintAndLogEx(NORMAL, "ISO15693 crc X25| %04x or %04x (906E expected)\n", crcCC, crc(CRC_15693, dataStr, sizeof(dataStr)));
+    PrintAndLogEx(NORMAL, "ISO15693 crc X25| %04x or %04x (906E expected)\n", crcCC, Crc16ex(CRC_15693, dataStr, sizeof(dataStr)));
 
     // ICLASS
     compute_crc(CRC_ICLASS, dataStr, sizeof(dataStr), &b1, &b2);
     uint16_t crcDD = b1 << 8 | b2;
-    PrintAndLogEx(NORMAL, "ICLASS crc      | %04x or %04x\n", crcDD, crc(CRC_ICLASS, dataStr, sizeof(dataStr)));
+    PrintAndLogEx(NORMAL, "ICLASS crc      | %04x or %04x\n", crcDD, Crc16ex(CRC_ICLASS, dataStr, sizeof(dataStr)));
 
     // FeliCa
     compute_crc(CRC_FELICA, dataStr, sizeof(dataStr), &b1, &b2);
     uint16_t crcEE = b1 << 8 | b2;
-    PrintAndLogEx(NORMAL, "FeliCa          | %04x or %04x (31C3 expected)\n", crcEE, crc(CRC_FELICA, dataStr, sizeof(dataStr)));
+    PrintAndLogEx(NORMAL, "FeliCa          | %04x or %04x (31C3 expected)\n", crcEE, Crc16ex(CRC_FELICA, dataStr, sizeof(dataStr)));
 
     free(data);
     return 0;
 }
-int CmdAnalyseCHKSUM(const char *Cmd) {
+static int CmdAnalyseCHKSUM(const char *Cmd) {
 
     uint8_t data[50];
     uint8_t cmdp = 0;
@@ -425,12 +420,13 @@ int CmdAnalyseCHKSUM(const char *Cmd) {
     return 0;
 }
 
-int CmdAnalyseDates(const char *Cmd) {
+static int CmdAnalyseDates(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
     // look for datestamps in a given array of bytes
     PrintAndLogEx(NORMAL, "To be implemented. Feel free to contribute!");
     return 0;
 }
-int CmdAnalyseTEASelfTest(const char *Cmd) {
+static int CmdAnalyseTEASelfTest(const char *Cmd) {
 
     uint8_t v[8], v_le[8];
     memset(v, 0x00, sizeof(v));
@@ -465,7 +461,8 @@ int CmdAnalyseTEASelfTest(const char *Cmd) {
     return 0;
 }
 
-char *pb(uint32_t b) {
+/*
+static char *pb(uint32_t b) {
     static char buf1[33] = {0};
     static char buf2[33] = {0};
     static char *s;
@@ -484,112 +481,77 @@ char *pb(uint32_t b) {
     }
     return s;
 }
+*/
 
-int CmdAnalyseA(const char *Cmd) {
+static int CmdAnalyseA(const char *Cmd) {
 
-    int hexlen = 0;
-    uint8_t cmdp = 0;
-    bool errors = false;
-    uint8_t data[USB_CMD_DATA_SIZE] = {0x00};
+    return usage_analyse_a();
+    /*
+        PrintAndLogEx(NORMAL, "-- " _BLUE_("its my message") "\n");
+        PrintAndLogEx(NORMAL, "-- " _RED_("its my message") "\n");
+        PrintAndLogEx(NORMAL, "-- " _YELLOW_("its my message") "\n");
+        PrintAndLogEx(NORMAL, "-- " _GREEN_("its my message") "\n");
 
-    while (param_getchar(Cmd, cmdp) != 0x00 && !errors) {
-        switch (tolower(param_getchar(Cmd, cmdp))) {
-            case 'd':
-                param_gethex_ex(Cmd, cmdp + 1, data, &hexlen);
-                hexlen >>= 1;
-                if (hexlen != sizeof(data)) {
-                    PrintAndLogEx(WARNING, "Read %d bytes of %u", hexlen, sizeof(data));
-                }
-                cmdp += 2;
-                break;
-            case 'h':
-                return usage_analyse_a();
-            default:
-                PrintAndLogEx(WARNING, "Unknown parameter '%c'", param_getchar(Cmd, cmdp));
-                errors = true;
-                break;
-        }
-    }
-    //Validations
-    if (errors || cmdp == 0) return usage_analyse_a();
+        //uint8_t syncBit = 99;
+        // The start bit is one ore more Sequence Y followed by a Sequence Z (... 11111111 00x11111). We need to distinguish from
+        // Sequence X followed by Sequence Y followed by Sequence Z     (111100x1 11111111 00x11111)
+        // we therefore look for a ...xx1111 11111111 00x11111xxxxxx... pattern
+        // (12 '1's followed by 2 '0's, eventually followed by another '0', followed by 5 '1's)
+    # define SYNC_16BIT 0xB24D
+        uint32_t shiftReg = param_get32ex(Cmd, 0, 0xb24d, 16);
+        uint8_t bt = param_get8ex(Cmd, 1, 0xBB, 16);
+        uint8_t byte_offset = 99;
+        // reverse byte
+        uint8_t rev =  reflect8(bt);
+        PrintAndLogEx(NORMAL, "input  %02x | %02x \n", bt, rev);
+        // add byte to shift register
+        shiftReg = shiftReg << 8 | rev;
 
+        PrintAndLogEx(NORMAL, "shiftreg after %08x | pattern %08x \n", shiftReg, SYNC_16BIT);
 
-    UsbCommand c = {CMD_FPC_SEND, {0, 0, 0}};
-    memcpy(c.d.asBytes, data, USB_CMD_DATA_SIZE);
-    clearCommandBuffer();
-    SendCommand(&c);
+        uint8_t n0 = 0, n1 = 0;
 
-    UsbCommand resp;
-    if (!WaitForResponseTimeout(CMD_ACK, &resp, 2500)) {
-        return 1;
-    }
-    PrintAndLogEx(NORMAL, "got ack.  Status %d", resp.arg[0]);
-    return 0;
+        n0 = (rev & (uint8_t)(~(0xFF >> (8 - 4)))) >> 4;
+        n1 = (n1 << 4) | (rev & (uint8_t)(~(0xFF << 4)));
 
-    PrintAndLogEx(NORMAL, "-- " _BLUE_("its my message") "\n");
-    PrintAndLogEx(NORMAL, "-- " _RED_("its my message") "\n");
-    PrintAndLogEx(NORMAL, "-- " _YELLOW_("its my message") "\n");
-    PrintAndLogEx(NORMAL, "-- " _GREEN_("its my message") "\n");
-
-    //uint8_t syncBit = 99;
-    // The start bit is one ore more Sequence Y followed by a Sequence Z (... 11111111 00x11111). We need to distinguish from
-    // Sequence X followed by Sequence Y followed by Sequence Z     (111100x1 11111111 00x11111)
-    // we therefore look for a ...xx1111 11111111 00x11111xxxxxx... pattern
-    // (12 '1's followed by 2 '0's, eventually followed by another '0', followed by 5 '1's)
-# define SYNC_16BIT 0xB24D
-    uint32_t shiftReg = param_get32ex(Cmd, 0, 0xb24d, 16);
-    uint8_t bt = param_get8ex(Cmd, 1, 0xBB, 16);
-    uint8_t byte_offset = 99;
-    // reverse byte
-    uint8_t rev =  reflect8(bt);
-    PrintAndLogEx(NORMAL, "input  %02x | %02x \n", bt, rev);
-    // add byte to shift register
-    shiftReg = shiftReg << 8 | rev;
-
-    PrintAndLogEx(NORMAL, "shiftreg after %08x | pattern %08x \n", shiftReg, SYNC_16BIT);
-
-    uint8_t n0 = 0, n1 = 0;
-
-    n0 = (rev & (uint8_t)(~(0xFF >> (8 - 4)))) >> 4;
-    n1 = (n1 << 4) | (rev & (uint8_t)(~(0xFF << 4)));
-
-    PrintAndLogEx(NORMAL, "rev %02X | %02X %s | %02X %s |\n", rev, n0, pb(n0), n1, pb(n1));
-
+        PrintAndLogEx(NORMAL, "rev %02X | %02X %s | %02X %s |\n", rev, n0, pb(n0), n1, pb(n1));
+    */
     /*
     hex(0xb24d shr 0) 0xB24D 0b1011001001001101
     hex(0xb24d shr 1) 0x5926
     hex(0xb24d shr 2) 0x2C93
     */
 
-    for (int i = 0; i < 16; i++) {
-        PrintAndLogEx(NORMAL, " (shiftReg >> %d) & 0xFFFF ==  %08x ---", i, ((shiftReg >> i) & 0xFFFF));
+    /*
+        for (int i = 0; i < 16; i++) {
+            PrintAndLogEx(NORMAL, " (shiftReg >> %d) & 0xFFFF ==  %08x ---", i, ((shiftReg >> i) & 0xFFFF));
 
-        // kolla om SYNC_PATTERN finns.
-        if (((shiftReg >> 7) & 0xFFFF) == SYNC_16BIT) byte_offset = 7;
-        else if (((shiftReg >> 6) & 0xFFFF) == SYNC_16BIT) byte_offset = 6;
-        else if (((shiftReg >> 5) & 0xFFFF) == SYNC_16BIT) byte_offset = 5;
-        else if (((shiftReg >> 4) & 0xFFFF) == SYNC_16BIT) byte_offset = 4;
-        else if (((shiftReg >> 3) & 0xFFFF) == SYNC_16BIT) byte_offset = 3;
-        else if (((shiftReg >> 2) & 0xFFFF) == SYNC_16BIT) byte_offset = 2;
-        else if (((shiftReg >> 1) & 0xFFFF) == SYNC_16BIT) byte_offset = 1;
-        else if (((shiftReg >> 0) & 0xFFFF) == SYNC_16BIT) byte_offset = 0;
+            // kolla om SYNC_PATTERN finns.
+            if (((shiftReg >> 7) & 0xFFFF) == SYNC_16BIT) byte_offset = 7;
+            else if (((shiftReg >> 6) & 0xFFFF) == SYNC_16BIT) byte_offset = 6;
+            else if (((shiftReg >> 5) & 0xFFFF) == SYNC_16BIT) byte_offset = 5;
+            else if (((shiftReg >> 4) & 0xFFFF) == SYNC_16BIT) byte_offset = 4;
+            else if (((shiftReg >> 3) & 0xFFFF) == SYNC_16BIT) byte_offset = 3;
+            else if (((shiftReg >> 2) & 0xFFFF) == SYNC_16BIT) byte_offset = 2;
+            else if (((shiftReg >> 1) & 0xFFFF) == SYNC_16BIT) byte_offset = 1;
+            else if (((shiftReg >> 0) & 0xFFFF) == SYNC_16BIT) byte_offset = 0;
 
-        PrintAndLogEx(NORMAL, "Offset  %u \n", byte_offset);
-        if (byte_offset != 99)
-            break;
+            PrintAndLogEx(NORMAL, "Offset  %u \n", byte_offset);
+            if (byte_offset != 99)
+                break;
 
-        shiftReg >>= 1;
-    }
+            shiftReg >>= 1;
+        }
 
-    uint8_t p1 = (rev & (uint8_t)(~(0xFF << byte_offset)));
-    PrintAndLogEx(NORMAL, "Offset  %u  | leftovers  %02x  %s \n", byte_offset, p1, pb(p1));
+        uint8_t p1 = (rev & (uint8_t)(~(0xFF << byte_offset)));
+        PrintAndLogEx(NORMAL, "Offset  %u  | leftovers  %02x  %s \n", byte_offset, p1, pb(p1));
 
-
+    */
 
     /*
     pm3 --> da hex2bin 4db2     0100110110110010
     */
-    return 0;
+    //return 0;
     /*
         // split byte into two parts.
         uint8_t offset = 3, n0 = 0, n1 = 0;
@@ -615,39 +577,41 @@ int CmdAnalyseA(const char *Cmd) {
         }
 
         */
-    return 0;
+//    return 0;
 
-    // 14443-A
-    uint8_t u14_c[] = {0x09, 0x78, 0x00, 0x92, 0x02, 0x54, 0x13, 0x02, 0x04, 0x2d, 0xe8 }; // atqs w crc
-    uint8_t u14_w[] = {0x09, 0x78, 0x00, 0x92, 0x02, 0x54, 0x13, 0x02, 0x04, 0x2d, 0xe7 }; // atqs w crc
-    PrintAndLogEx(FAILED, "14a check wrong crc      | %s\n", (check_crc(CRC_14443_A, u14_w, sizeof(u14_w))) ? "YES" : "NO");
-    PrintAndLogEx(SUCCESS, "14a check correct crc    | %s\n", (check_crc(CRC_14443_A, u14_c, sizeof(u14_c))) ? "YES" : "NO");
+    /*
+        // 14443-A
+        uint8_t u14_c[] = {0x09, 0x78, 0x00, 0x92, 0x02, 0x54, 0x13, 0x02, 0x04, 0x2d, 0xe8 }; // atqs w crc
+        uint8_t u14_w[] = {0x09, 0x78, 0x00, 0x92, 0x02, 0x54, 0x13, 0x02, 0x04, 0x2d, 0xe7 }; // atqs w crc
+        PrintAndLogEx(FAILED, "14a check wrong crc      | %s\n", (check_crc(CRC_14443_A, u14_w, sizeof(u14_w))) ? "YES" : "NO");
+        PrintAndLogEx(SUCCESS, "14a check correct crc    | %s\n", (check_crc(CRC_14443_A, u14_c, sizeof(u14_c))) ? "YES" : "NO");
 
-    // 14443-B
-    uint8_t u14b[] = {0x05, 0x00, 0x08, 0x39, 0x73};
-    PrintAndLogEx(NORMAL, "14b check crc            | %s\n", (check_crc(CRC_14443_B, u14b, sizeof(u14b))) ? "YES" : "NO");
+        // 14443-B
+        uint8_t u14b[] = {0x05, 0x00, 0x08, 0x39, 0x73};
+        PrintAndLogEx(NORMAL, "14b check crc            | %s\n", (check_crc(CRC_14443_B, u14b, sizeof(u14b))) ? "YES" : "NO");
 
-    // 15693 test
-    uint8_t u15_c[] = {0x05, 0x00, 0x08, 0x39, 0x73}; // correct
-    uint8_t u15_w[] = {0x05, 0x00, 0x08, 0x39, 0x72}; // wrong
-    PrintAndLogEx(FAILED, "15 check wrong crc       | %s\n", (check_crc(CRC_15693, u15_w, sizeof(u15_w))) ? "YES" : "NO");
-    PrintAndLogEx(SUCCESS, "15 check correct crc     | %s\n", (check_crc(CRC_15693, u15_c, sizeof(u15_c))) ? "YES" : "NO");
+        // 15693 test
+        uint8_t u15_c[] = {0x05, 0x00, 0x08, 0x39, 0x73}; // correct
+        uint8_t u15_w[] = {0x05, 0x00, 0x08, 0x39, 0x72}; // wrong
+        PrintAndLogEx(FAILED, "15 check wrong crc       | %s\n", (check_crc(CRC_15693, u15_w, sizeof(u15_w))) ? "YES" : "NO");
+        PrintAndLogEx(SUCCESS, "15 check correct crc     | %s\n", (check_crc(CRC_15693, u15_c, sizeof(u15_c))) ? "YES" : "NO");
 
-    // iCLASS test - wrong crc , swapped bytes.
-    uint8_t iclass_w[] = { 0x40, 0xe1, 0xe1, 0xff, 0xfe, 0x5f, 0x02, 0x3c, 0x01, 0x43};
-    uint8_t iclass_c[] = { 0x40, 0xe1, 0xe1, 0xff, 0xfe, 0x5f, 0x02, 0x3c, 0x43, 0x01};
-    PrintAndLogEx(FAILED, "iCLASS check wrong crc   | %s\n", (check_crc(CRC_ICLASS, iclass_w, sizeof(iclass_w))) ? "YES" : "NO");
-    PrintAndLogEx(SUCCESS, "iCLASS check correct crc | %s\n", (check_crc(CRC_ICLASS, iclass_c, sizeof(iclass_c))) ? "YES" : "NO");
+        // iCLASS test - wrong crc , swapped bytes.
+        uint8_t iclass_w[] = { 0x40, 0xe1, 0xe1, 0xff, 0xfe, 0x5f, 0x02, 0x3c, 0x01, 0x43};
+        uint8_t iclass_c[] = { 0x40, 0xe1, 0xe1, 0xff, 0xfe, 0x5f, 0x02, 0x3c, 0x43, 0x01};
+        PrintAndLogEx(FAILED, "iCLASS check wrong crc   | %s\n", (check_crc(CRC_ICLASS, iclass_w, sizeof(iclass_w))) ? "YES" : "NO");
+        PrintAndLogEx(SUCCESS, "iCLASS check correct crc | %s\n", (check_crc(CRC_ICLASS, iclass_c, sizeof(iclass_c))) ? "YES" : "NO");
 
-    // FeliCa test
-    uint8_t felica_w[] = {0x12, 0x01, 0x01, 0x2e, 0x3d, 0x17, 0x26, 0x47, 0x80, 0x95, 0x00, 0xf1, 0x00, 0x00, 0x00, 0x01, 0x43, 0x00, 0xb3, 0x7e};
-    uint8_t felica_c[] = {0x12, 0x01, 0x01, 0x2e, 0x3d, 0x17, 0x26, 0x47, 0x80, 0x95, 0x00, 0xf1, 0x00, 0x00, 0x00, 0x01, 0x43, 0x00, 0xb3, 0x7f};
-    PrintAndLogEx(FAILED, "FeliCa check wrong crc   | %s\n", (check_crc(CRC_FELICA, felica_w, sizeof(felica_w))) ? "YES" : "NO");
-    PrintAndLogEx(SUCCESS, "FeliCa check correct crc | %s\n", (check_crc(CRC_FELICA, felica_c, sizeof(felica_c))) ? "YES" : "NO");
+        // FeliCa test
+        uint8_t felica_w[] = {0x12, 0x01, 0x01, 0x2e, 0x3d, 0x17, 0x26, 0x47, 0x80, 0x95, 0x00, 0xf1, 0x00, 0x00, 0x00, 0x01, 0x43, 0x00, 0xb3, 0x7e};
+        uint8_t felica_c[] = {0x12, 0x01, 0x01, 0x2e, 0x3d, 0x17, 0x26, 0x47, 0x80, 0x95, 0x00, 0xf1, 0x00, 0x00, 0x00, 0x01, 0x43, 0x00, 0xb3, 0x7f};
+        PrintAndLogEx(FAILED, "FeliCa check wrong crc   | %s\n", (check_crc(CRC_FELICA, felica_w, sizeof(felica_w))) ? "YES" : "NO");
+        PrintAndLogEx(SUCCESS, "FeliCa check correct crc | %s\n", (check_crc(CRC_FELICA, felica_c, sizeof(felica_c))) ? "YES" : "NO");
 
-    PrintAndLogEx(NORMAL, "\n\n");
+        PrintAndLogEx(NORMAL, "\n\n");
 
-    return 0;
+        return 0;
+        */
     /*
     bool term = !isatty(STDIN_FILENO);
     if (!term) {
@@ -691,36 +655,37 @@ int CmdAnalyseA(const char *Cmd) {
     uid(3e172b29) nt(039b7bd2) ks(0c0e0f0505080800) nr(00000001)
     uid(3e172b29) nt(039b7bd2) ks(0e06090d03000b0f) nr(00000002)
     */
-    uint64_t *keylistA = NULL, *keylistB = NULL;
-    uint32_t keycountA = 0, keycountB = 0;
-//  uint64_t d1[] = {0x3e172b29, 0x039b7bd2, 0x0000001, 0, 0x0c0e0f0505080800};
-//  uint64_t d2[] = {0x3e172b29, 0x039b7bd2, 0x0000002, 0, 0x0e06090d03000b0f};
-    uint64_t d1[] = {0x6e442129, 0x8f699195, 0x0000001, 0, 0x090d0b0305020f02};
-    uint64_t d2[] = {0x6e442129, 0x8f699195, 0x0000004, 0, 0x00040f0f0305030e};
+    /*
+        uint64_t *keylistA = NULL, *keylistB = NULL;
+        uint32_t keycountA = 0, keycountB = 0;
+    //  uint64_t d1[] = {0x3e172b29, 0x039b7bd2, 0x0000001, 0, 0x0c0e0f0505080800};
+    //  uint64_t d2[] = {0x3e172b29, 0x039b7bd2, 0x0000002, 0, 0x0e06090d03000b0f};
+        uint64_t d1[] = {0x6e442129, 0x8f699195, 0x0000001, 0, 0x090d0b0305020f02};
+        uint64_t d2[] = {0x6e442129, 0x8f699195, 0x0000004, 0, 0x00040f0f0305030e};
 
-    keycountA = nonce2key(d1[0], d1[1], d1[2], 0, d1[3], d1[4], &keylistA);
-    keycountB = nonce2key(d2[0], d2[1], d2[2], 0, d2[3], d2[4], &keylistB);
+        keycountA = nonce2key(d1[0], d1[1], d1[2], 0, d1[3], d1[4], &keylistA);
+        keycountB = nonce2key(d2[0], d2[1], d2[2], 0, d2[3], d2[4], &keylistB);
 
-    switch (keycountA) {
-        case 0:
-            PrintAndLogEx(FAILED, "Key test A failed\n");
-            break;
-        case 1:
-            PrintAndLogEx(SUCCESS, "KEY A | %012" PRIX64 " ", keylistA[0]);
-            break;
-    }
-    switch (keycountB) {
-        case 0:
-            PrintAndLogEx(FAILED, "Key test B failed\n");
-            break;
-        case 1:
-            PrintAndLogEx(SUCCESS, "KEY B | %012" PRIX64 " ", keylistB[0]);
-            break;
-    }
+        switch (keycountA) {
+            case 0:
+                PrintAndLogEx(FAILED, "Key test A failed\n");
+                break;
+            case 1:
+                PrintAndLogEx(SUCCESS, "KEY A | %012" PRIX64 " ", keylistA[0]);
+                break;
+        }
+        switch (keycountB) {
+            case 0:
+                PrintAndLogEx(FAILED, "Key test B failed\n");
+                break;
+            case 1:
+                PrintAndLogEx(SUCCESS, "KEY B | %012" PRIX64 " ", keylistB[0]);
+                break;
+        }
 
-    free(keylistA);
-    free(keylistB);
-
+        free(keylistA);
+        free(keylistB);
+    */
 //  qsort(keylist, keycount, sizeof(*keylist), compare_uint64);
 //  keycount = intersection(last_keylist, keylist);
 
@@ -848,10 +813,10 @@ int CmdAnalyseA(const char *Cmd) {
         );
     }
     */
-    return 0;
+//    return 0;
 }
 
-void generate4bNUID(uint8_t *uid, uint8_t *nuid) {
+static void generate4bNUID(uint8_t *uid, uint8_t *nuid) {
     uint16_t crc;
     uint8_t b1, b2;
 
@@ -865,7 +830,7 @@ void generate4bNUID(uint8_t *uid, uint8_t *nuid) {
     nuid[3] = crc & 0xFF;
 }
 
-int CmdAnalyseNuid(const char *Cmd) {
+static int CmdAnalyseNuid(const char *Cmd) {
     uint8_t nuid[4] = {0};
     uint8_t uid[7] = {0};
     int len = 0;
@@ -903,25 +868,25 @@ int CmdAnalyseNuid(const char *Cmd) {
     return 0;
 }
 static command_t CommandTable[] = {
-    {"help",    CmdHelp,            1, "This help"},
-    {"lcr",     CmdAnalyseLCR,      1, "Generate final byte for XOR LRC"},
-    {"crc",     CmdAnalyseCRC,      1, "Stub method for CRC evaluations"},
-    {"chksum",  CmdAnalyseCHKSUM,   1, "Checksum with adding, masking and one's complement"},
-    {"dates",   CmdAnalyseDates,    1, "Look for datestamps in a given array of bytes"},
-    {"tea",     CmdAnalyseTEASelfTest, 1, "Crypto TEA test"},
-    {"lfsr",    CmdAnalyseLfsr,     1, "LFSR tests"},
-    {"a",       CmdAnalyseA,        1, "num bits test"},
-    {"nuid",    CmdAnalyseNuid,     1, "create NUID from 7byte UID"},
-    {NULL, NULL, 0, NULL}
+    {"help",    CmdHelp,            AlwaysAvailable, "This help"},
+    {"lcr",     CmdAnalyseLCR,      AlwaysAvailable, "Generate final byte for XOR LRC"},
+    {"crc",     CmdAnalyseCRC,      AlwaysAvailable, "Stub method for CRC evaluations"},
+    {"chksum",  CmdAnalyseCHKSUM,   AlwaysAvailable, "Checksum with adding, masking and one's complement"},
+    {"dates",   CmdAnalyseDates,    AlwaysAvailable, "Look for datestamps in a given array of bytes"},
+    {"tea",     CmdAnalyseTEASelfTest, AlwaysAvailable, "Crypto TEA test"},
+    {"lfsr",    CmdAnalyseLfsr,     AlwaysAvailable, "LFSR tests"},
+    {"a",       CmdAnalyseA,        AlwaysAvailable, "num bits test"},
+    {"nuid",    CmdAnalyseNuid,     AlwaysAvailable, "create NUID from 7byte UID"},
+    {NULL, NULL, NULL, NULL}
 };
 
-int CmdAnalyse(const char *Cmd) {
-    clearCommandBuffer();
-    CmdsParse(CommandTable, Cmd);
+static int CmdHelp(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
+    CmdsHelp(CommandTable);
     return 0;
 }
 
-int CmdHelp(const char *Cmd) {
-    CmdsHelp(CommandTable);
-    return 0;
+int CmdAnalyse(const char *Cmd) {
+    clearCommandBuffer();
+    return CmdsParse(CommandTable, Cmd);
 }

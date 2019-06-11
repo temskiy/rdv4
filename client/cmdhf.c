@@ -12,7 +12,7 @@
 
 static int CmdHelp(const char *Cmd);
 
-int usage_hf_search() {
+static int usage_hf_search() {
     PrintAndLogEx(NORMAL, "Usage: hf search");
     PrintAndLogEx(NORMAL, "Will try to find a HF read out of the unknown tag. Stops when found.");
     PrintAndLogEx(NORMAL, "Options:");
@@ -20,7 +20,8 @@ int usage_hf_search() {
     PrintAndLogEx(NORMAL, "");
     return 0;
 }
-int usage_hf_sniff() {
+
+static int usage_hf_sniff() {
     PrintAndLogEx(NORMAL, "The high frequence sniffer will assign all available memory on device for sniffed data");
     PrintAndLogEx(NORMAL, "Use " _YELLOW_("'data samples'")" command to download from device,  and " _YELLOW_("'data plot'")" to look at it");
     PrintAndLogEx(NORMAL, "Press button to quit the sniffing.\n");
@@ -36,6 +37,16 @@ int usage_hf_sniff() {
     return 0;
 }
 
+static int usage_hf_tune() {
+    PrintAndLogEx(NORMAL, "Usage: hf tune [<iter>]");
+    PrintAndLogEx(NORMAL, "Continuously measure HF antenna tuning.");
+    PrintAndLogEx(NORMAL, "Press button or keyboard to interrupt.");
+    PrintAndLogEx(NORMAL, "Options:");
+    PrintAndLogEx(NORMAL, "       <iter>               - number of iterations (default: infinite)");
+    PrintAndLogEx(NORMAL, "");
+    return 0;
+}
+
 int CmdHFSearch(const char *Cmd) {
 
     char cmdp = tolower(param_getchar(Cmd, 0));
@@ -43,36 +54,30 @@ int CmdHFSearch(const char *Cmd) {
 
     PrintAndLogEx(INFO, "Checking for known tags...\n");
 
-    int ans = CmdHF14AInfo("s");
-    if (ans > 0) {
+    if (infoHF14A(false, false) > 0) {
         PrintAndLogEx(SUCCESS, "\nValid " _GREEN_("ISO14443-A tag") " found\n");
-        return ans;
+        return 1;
     }
-    ans = HF15Reader("", false);
-    if (ans) {
+    if (readHF15Uid(false) == 1) {
         PrintAndLogEx(SUCCESS, "\nValid " _GREEN_("ISO15693 tag") " found\n");
-        return ans;
+        return 1;
     }
-    ans = HFLegicReader("", false);
-    if (ans == 0) {
+    if (readLegicUid(false) == 0) {
         PrintAndLogEx(SUCCESS, "\nValid " _GREEN_("LEGIC tag") " found\n");
         return 1;
     }
-    ans = CmdHFTopazReader("s");
-    if (ans == 0) {
+    if (readTopazUid() == 0) {
         PrintAndLogEx(SUCCESS, "\nValid " _GREEN_("Topaz tag") " found\n");
         return 1;
     }
     // 14b and iclass is the longest test (put last)
-    ans = HF14BReader(false); //CmdHF14BReader("s");
-    if (ans) {
+    if (readHF14B(false) == 1) {
         PrintAndLogEx(SUCCESS, "\nValid " _GREEN_("ISO14443-B tag") " found\n");
-        return ans;
+        return 1;
     }
-    ans = HFiClassReader("", false, false);
-    if (ans) {
+    if (readIclass(false, false) == 1) {
         PrintAndLogEx(SUCCESS, "\nValid " _GREEN_("iClass tag / PicoPass tag") " found\n");
-        return ans;
+        return 1;
     }
 
     /*
@@ -88,11 +93,46 @@ int CmdHFSearch(const char *Cmd) {
 }
 
 int CmdHFTune(const char *Cmd) {
-    PrintAndLogEx(SUCCESS, "Measuring HF antenna, press button to exit");
-    UsbCommand c = {CMD_MEASURE_ANTENNA_TUNING_HF};
+    char cmdp = tolower(param_getchar(Cmd, 0));
+    if (cmdp == 'h') return usage_hf_tune();
+    int iter =  param_get32ex(Cmd, 0, 0, 10);
+
+    PacketResponseNG resp;
+    PrintAndLogEx(SUCCESS, "Measuring HF antenna, click button or press a key to exit");
     clearCommandBuffer();
-    SendCommand(&c);
-    return 0;
+    uint8_t mode[] = {1};
+    SendCommandNG(CMD_MEASURE_ANTENNA_TUNING_HF, mode, sizeof(mode));
+    if (!WaitForResponseTimeout(CMD_MEASURE_ANTENNA_TUNING_HF, &resp, 1000)) {
+        PrintAndLogEx(WARNING, "Timeout while waiting for Proxmark HF initialization, aborting");
+        return PM3_ETIMEOUT;
+    }
+    mode[0] = 2;
+    // loop forever (till button pressed) if iter = 0 (default)
+    for (uint8_t i = 0; iter == 0 || i < iter; i++) {
+        if (ukbhit()) { // abort by keyboard press
+            int gc = getchar();
+            (void)gc;
+            break;
+        }
+        SendCommandNG(CMD_MEASURE_ANTENNA_TUNING_HF, mode, sizeof(mode));
+        if (!WaitForResponseTimeout(CMD_MEASURE_ANTENNA_TUNING_HF, &resp, 1000)) {
+            PrintAndLogEx(WARNING, "Timeout while waiting for Proxmark HF measure, aborting");
+            return PM3_ETIMEOUT;
+        }
+        if ((resp.status == PM3_EOPABORTED) || (resp.length != sizeof(uint16_t)))
+            break;
+        uint16_t volt = resp.data.asDwords[0];
+        PrintAndLogEx(INPLACE, "%u mV / %5u V", volt, (uint16_t)(volt / 1000));
+    }
+    mode[0] = 3;
+    SendCommandNG(CMD_MEASURE_ANTENNA_TUNING_HF, mode, sizeof(mode));
+    if (!WaitForResponseTimeout(CMD_MEASURE_ANTENNA_TUNING_HF, &resp, 1000)) {
+        PrintAndLogEx(WARNING, "Timeout while waiting for Proxmark HF shutdown, aborting");
+        return PM3_ETIMEOUT;
+    }
+    PrintAndLogEx(NORMAL, "");
+    PrintAndLogEx(SUCCESS, "Done.");
+    return PM3_SUCCESS;
 }
 
 int CmdHFSniff(const char *Cmd) {
@@ -102,41 +142,40 @@ int CmdHFSniff(const char *Cmd) {
     int skippairs =  param_get32ex(Cmd, 0, 0, 10);
     int skiptriggers =  param_get32ex(Cmd, 1, 0, 10);
 
-    UsbCommand c = {CMD_HF_SNIFFER, {skippairs, skiptriggers, 0}};
     clearCommandBuffer();
-    SendCommand(&c);
+    SendCommandMIX(CMD_HF_SNIFFER, skippairs, skiptriggers, 0, NULL, 0);
     return 0;
 }
 
 static command_t CommandTable[] = {
-    {"help",        CmdHelp,          1, "This help"},
-    {"14a",         CmdHF14A,         1, "{ ISO14443A RFIDs...               }"},
-    {"14b",         CmdHF14B,         1, "{ ISO14443B RFIDs...               }"},
-    {"15",          CmdHF15,          1, "{ ISO15693 RFIDs...                }"},
-    {"epa",         CmdHFEPA,         1, "{ German Identification Card...    }"},
-    {"felica",      CmdHFFelica,      1, "{ ISO18092 / Felica RFIDs...       }"},
-    {"legic",       CmdHFLegic,       1, "{ LEGIC RFIDs...                   }"},
-    {"iclass",      CmdHFiClass,      1, "{ ICLASS RFIDs...                  }"},
-    {"mf",          CmdHFMF,          1, "{ MIFARE RFIDs...                  }"},
-    {"mfp",         CmdHFMFP,         1, "{ MIFARE Plus RFIDs...             }"},
-    {"mfu",         CmdHFMFUltra,     1, "{ MIFARE Ultralight RFIDs...       }"},
-    {"mfdes",       CmdHFMFDes,       1, "{ MIFARE Desfire RFIDs...          }"},
-    {"topaz",       CmdHFTopaz,       1, "{ TOPAZ (NFC Type 1) RFIDs...      }"},
-    {"fido",        CmdHFFido,        1, "{ FIDO and FIDO2 authenticators... }"},
-    {"list",        CmdTraceList,     0, "List protocol data in trace buffer"},
-    {"tune",        CmdHFTune,        0, "Continuously measure HF antenna tuning"},
-    {"search",      CmdHFSearch,      1, "Search for known HF tags [preliminary]"},
-    {"sniff",       CmdHFSniff,       0, "<samples to skip (10000)> <triggers to skip (1)> Generic HF Sniff"},
-    {NULL, NULL, 0, NULL}
+    {"help",        CmdHelp,          AlwaysAvailable, "This help"},
+    {"14a",         CmdHF14A,         AlwaysAvailable, "{ ISO14443A RFIDs...               }"},
+    {"14b",         CmdHF14B,         AlwaysAvailable, "{ ISO14443B RFIDs...               }"},
+    {"15",          CmdHF15,          AlwaysAvailable, "{ ISO15693 RFIDs...                }"},
+    {"epa",         CmdHFEPA,         AlwaysAvailable, "{ German Identification Card...    }"},
+    {"felica",      CmdHFFelica,      AlwaysAvailable, "{ ISO18092 / Felica RFIDs...       }"},
+    {"legic",       CmdHFLegic,       AlwaysAvailable, "{ LEGIC RFIDs...                   }"},
+    {"iclass",      CmdHFiClass,      AlwaysAvailable, "{ ICLASS RFIDs...                  }"},
+    {"mf",          CmdHFMF,          AlwaysAvailable, "{ MIFARE RFIDs...                  }"},
+    {"mfp",         CmdHFMFP,         AlwaysAvailable, "{ MIFARE Plus RFIDs...             }"},
+    {"mfu",         CmdHFMFUltra,     AlwaysAvailable, "{ MIFARE Ultralight RFIDs...       }"},
+    {"mfdes",       CmdHFMFDes,       AlwaysAvailable, "{ MIFARE Desfire RFIDs...          }"},
+    {"topaz",       CmdHFTopaz,       AlwaysAvailable, "{ TOPAZ (NFC Type 1) RFIDs...      }"},
+    {"fido",        CmdHFFido,        AlwaysAvailable, "{ FIDO and FIDO2 authenticators... }"},
+    {"list",        CmdTraceList,     AlwaysAvailable,    "List protocol data in trace buffer"},
+    {"tune",        CmdHFTune,        IfPm3Present,    "Continuously measure HF antenna tuning"},
+    {"search",      CmdHFSearch,      AlwaysAvailable, "Search for known HF tags [preliminary]"},
+    {"sniff",       CmdHFSniff,       IfPm3Hfsniff,    "<samples to skip (10000)> <triggers to skip (1)> Generic HF Sniff"},
+    {NULL, NULL, NULL, NULL}
 };
 
 int CmdHF(const char *Cmd) {
     clearCommandBuffer();
-    CmdsParse(CommandTable, Cmd);
-    return 0;
+    return CmdsParse(CommandTable, Cmd);
 }
 
 int CmdHelp(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
     CmdsHelp(CommandTable);
     return 0;
 }

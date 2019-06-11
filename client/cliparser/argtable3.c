@@ -236,7 +236,7 @@ int opterr = 1;         /* if error message should be printed */
 int optind = 1;         /* index into parent argv vector */
 int optopt = '?';       /* character checked for validity */
 int optreset;           /* reset getopt */
-char *optarg;           /* argument associated with option */
+const char *optarg;     /* argument associated with option */
 #endif
 
 #define PRINT_ERROR     ((opterr) && (*options != ':'))
@@ -259,7 +259,7 @@ static int parse_long_options(char *const *, const char *,
 static int gcd(int, int);
 static void permute_args(int, int, int, char *const *);
 
-static char *place = EMSG; /* option letter processing */
+static const char *place = EMSG; /* option letter processing */
 
 /* XXX: set optreset to 1 rather than these two */
 static int nonopt_start = -1; /* first non option argument (for permute) */
@@ -377,7 +377,7 @@ permute_args(int panonopt_start, int panonopt_end, int opt_end,
 static int
 parse_long_options(char *const *nargv, const char *options,
                    const struct option *long_options, int *idx, int short_too) {
-    char *current_argv, *has_equal;
+    const char *current_argv, *has_equal;
     size_t current_argv_len;
     int i, match;
 
@@ -2552,7 +2552,7 @@ static int arg_rex_scanfn(struct arg_rex *parent, const char *argval) {
     int errorcode = 0;
     const TRexChar *error = NULL;
     TRex *rex = NULL;
-    TRexBool is_match = TRex_False;
+    TRexBool is_match;
 
     if (parent->count == parent->hdr.maxcount) {
         /* maximum number of arguments exceeded */
@@ -2960,10 +2960,19 @@ static int trex_class(TRex *exp) {
     while (*exp->_p != ']' && exp->_p != exp->_eol) {
         if (*exp->_p == '-' && first != -1) {
             int r, t;
-            if (*exp->_p++ == ']') trex_error(exp, _SC("unfinished range"));
+            if (*exp->_p++ == ']') {
+                trex_error(exp, _SC("unfinished range"));
+            }
+
             r = trex_newnode(exp, OP_RANGE);
-            if (first > *exp->_p) trex_error(exp, _SC("invalid range"));
-            if (exp->_nodes[first].type == OP_CCLASS) trex_error(exp, _SC("cannot use character classes in ranges"));
+            if (first > *exp->_p) {
+                trex_error(exp, _SC("invalid range"));
+            }
+
+            if (exp->_nodes[first].type == OP_CCLASS) {
+                trex_error(exp, _SC("cannot use character classes in ranges"));
+            }
+
             exp->_nodes[r].left = exp->_nodes[first].type;
             t = trex_escapechar(exp);
             exp->_nodes[r].right = t;
@@ -2984,8 +2993,6 @@ static int trex_class(TRex *exp) {
     if (first != -1) {
         int c = first;
         exp->_nodes[chain].next = c;
-        chain = c;
-        first = -1;
     }
     /* hack? */
     exp->_nodes[ret].left = exp->_nodes[ret].next;
@@ -3263,7 +3270,6 @@ static const TRexChar *trex_matchnode(TRex *exp, TRexNode *node, const TRexChar 
                     return asd;
             }
             return NULL;
-            break;
         }
         case OP_EXPR:
         case OP_NOCAPEXPR: {
@@ -4319,9 +4325,9 @@ void arg_print_option(FILE *fp,
 static
 void arg_print_gnuswitch(FILE *fp, struct arg_hdr * *table) {
     int tabindex;
-    char *format1 = " -%c";
-    char *format2 = " [-%c";
-    char *suffix = "";
+    const char *format1 = " -%c";
+    const char *format2 = " [-%c";
+    const char *suffix = "";
 
     /* print all mandatory switches that are without argument values */
     for (tabindex = 0;
@@ -4542,8 +4548,9 @@ void arg_print_formatted(FILE *fp,
     const unsigned colwidth = (rmargin - lmargin) + 1;
 
     /* Someone doesn't like us... */
-    if (line_end < line_start)
-    { fprintf(fp, "%s\n", text); }
+    if (line_end == line_start) {
+        fprintf(fp, "%s\n", text);
+    }
 
     while (line_end - 1 > line_start) {
         /* Eat leading whitespaces. This is essential because while

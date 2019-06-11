@@ -18,6 +18,10 @@ typedef struct {
 } __attribute__((__packed__)) card_clone_t;
 
 
+void ModInfo(void) {
+    DbpString("   HF Mifare sniff/simulation - (Craig Young)");
+}
+
 void RunMod() {
     StandAloneMode();
     Dbprintf(">>  Craig Young Mifare sniff UID/clone uid 2 magic/sim  a.k.a YoungRun Started  <<");
@@ -35,7 +39,7 @@ void RunMod() {
     for (;;) {
         WDT_HIT();
         // exit from Standalone Mode,   send a usbcommand.
-        if (usb_poll_validate_length()) return;
+        if (data_available()) return;
 
         SpinDelay(300);
 
@@ -43,7 +47,7 @@ void RunMod() {
             iGotoRecord = 0;
             LEDsoff();
             LED(selected + 1, 0);
-            LED(LED_RED2, 0);
+            LED(LED_D, 0);
 
             // record
             Dbprintf("Enabling iso14443a reader mode for [Bank: %d]...", selected);
@@ -53,7 +57,7 @@ void RunMod() {
 
             for (;;) {
                 // exit from Standalone Mode,   send a usbcommand.
-                if (usb_poll_validate_length()) return;
+                if (data_available()) return;
 
                 if (BUTTON_PRESS()) {
                     if (cardRead[selected]) {
@@ -95,10 +99,10 @@ void RunMod() {
             Dbprintf("ATQA = %02X%02X", uids[selected].atqa[0], uids[selected].atqa[1]);
             Dbprintf("SAK = %02X", uids[selected].sak);
             LEDsoff();
-            LED(LED_GREEN,  200);
-            LED(LED_ORANGE, 200);
-            LED(LED_GREEN,  200);
-            LED(LED_ORANGE, 200);
+            LED(LED_B,  200);
+            LED(LED_A, 200);
+            LED(LED_B,  200);
+            LED(LED_A, 200);
 
             LEDsoff();
             LED(selected + 1, 0);
@@ -114,7 +118,7 @@ void RunMod() {
             iGotoClone = 0;
             LEDsoff();
             LED(selected + 1, 0);
-            LED(LED_ORANGE, 250);
+            LED(LED_A, 250);
 
             // magiccards holds 4bytes uid.  *usually*
             uint32_t tmpuid = bytes_to_num(uids[selected].uid, 4);
@@ -132,12 +136,10 @@ void RunMod() {
             SpinDelay(500);
             // Begin clone function here:
             /* Example from client/mifarehost.c for commanding a block write for "magic Chinese" cards:
-                    UsbCommand c = {CMD_MIFARE_CSETBLOCK, {params & (0xFE | (uid == NULL ? 0:1)), blockNo, 0}};
-                    memcpy(c.d.asBytes, data, 16);
-                    SendCommand(&c);
+                    SendCommandOLD(CMD_MIFARE_CSETBLOCK, params & (0xFE | (uid == NULL ? 0:1)), blockNo, 0, data, 16);
 
                 Block read is similar:
-                    UsbCommand c = {CMD_MIFARE_CGETBLOCK, {params, blockNo, 0}};
+                    SendCommandOLD(CMD_MIFARE_CGETBLOCK, params, blockNo, 0,...};
                 We need to imitate that call with blockNo 0 to set a uid.
 
                 The get and set commands are handled in this file:
@@ -158,15 +160,16 @@ void RunMod() {
                             Bytes 5-7 are reserved SAK and ATQA for mifare classic
                     -Use mfCSetBlock(0, block0, oldUID, wantWipe, MAGIC_SINGLE) to write it
             */
-            uint8_t oldBlock0[16] = {0}, newBlock0[16] = {0}, testBlock0[16] = {0};
+            uint8_t oldBlock0[16] = {0}, newBlock0[16] = {0};
             // arg0 = Flags, arg1=blockNo
             MifareCGetBlock(params, 0, oldBlock0);
             if (oldBlock0[0] == 0 && oldBlock0[0] == oldBlock0[1]  && oldBlock0[1] == oldBlock0[2] && oldBlock0[2] == oldBlock0[3]) {
                 Dbprintf("No changeable tag detected. Returning to replay mode for bank[%d]", selected);
                 playing = 1;
             } else {
+                uint8_t testBlock0[16] = {0};
                 Dbprintf("UID from target tag: %02X%02X%02X%02X", oldBlock0[0], oldBlock0[1], oldBlock0[2], oldBlock0[3]);
-                memcpy(newBlock0, oldBlock0, 16);
+                memcpy(newBlock0 + 5, oldBlock0 + 5, 11);
 
                 // Copy uid for bank (2nd is for longer UIDs not supported if classic)
                 memcpy(newBlock0, uids[selected].uid, 4);
@@ -198,17 +201,17 @@ void RunMod() {
             LED(selected + 1, 0);
 
             // Begin transmitting
-            LED(LED_GREEN, 0);
+            LED(LED_B, 0);
             DbpString("Playing");
             for (; ;) {
                 // exit from Standalone Mode,   send a usbcommand.
-                if (usb_poll_validate_length()) return;
+                if (data_available()) return;
 
                 int button_action = BUTTON_HELD(1000);
                 if (button_action == 0) {  // No button action, proceed with sim
 
                     uint8_t flags = FLAG_4B_UID_IN_DATA;
-                    uint8_t data[USB_CMD_DATA_SIZE] = {0}; // in case there is a read command received we shouldn't break
+                    uint8_t data[PM3_CMD_DATA_SIZE] = {0}; // in case there is a read command received we shouldn't break
 
                     memcpy(data, uids[selected].uid, uids[selected].uidlen);
 

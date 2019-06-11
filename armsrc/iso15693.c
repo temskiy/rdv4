@@ -81,9 +81,9 @@
 #define Logic1                Iso15693Logic1
 #define FrameEOF              Iso15693FrameEOF
 
-#define Crc(data, len)        crc(CRC_15693, (data), (len))
-#define CheckCrc(data, len)   check_crc(CRC_15693, (data), (len))
-#define AddCrc(data, len)     compute_crc(CRC_15693, (data), (len), (data)+(len), (data)+(len)+1)
+//#define Crc(data, len)        Crc(CRC_15693, (data), (len))
+#define CheckCrc15(data, len)   check_crc(CRC_15693, (data), (len))
+#define AddCrc15(data, len)     compute_crc(CRC_15693, (data), (len), (data)+(len), (data)+(len)+1)
 
 #define sprintUID(target,uid) Iso15693sprintUID((target), (uid))
 
@@ -330,7 +330,7 @@ static int DemodAnswer(uint8_t *received, uint8_t *dest, uint16_t samplecount) {
         // Even things out by the length of the target waveform.
         corr0 *= 4;
         corr1 *= 4;
-        // if (MF_DBGLEVEL >= MF_DBG_EXTENDED)
+        // if (DBGLEVEL >= DBG_EXTENDED)
         // Dbprintf("Corr1 %d, Corr0 %d, CorrEOF %d", corr1, corr0, corrEOF);
 
         if (corrEOF > corr1 && corrEOF > corr0)
@@ -356,12 +356,12 @@ static int DemodAnswer(uint8_t *received, uint8_t *dest, uint16_t samplecount) {
         }
     }
 
-    if (MF_DBGLEVEL >= MF_DBG_EXTENDED) Dbprintf("ice: demod bytes %u", k);
+    if (DBGLEVEL >= DBG_EXTENDED) Dbprintf("ice: demod bytes %u", k);
 
     if (mask != 0x01) { // this happens, when we miss the EOF
 
         // TODO: for some reason this happens quite often
-        if (MF_DBGLEVEL >= MF_DBG_ERROR && k != 0) Dbprintf("[!] error, uneven octet! (extra bits!) mask %02x", mask);
+        if (DBGLEVEL >= DBG_ERROR && k != 0) Dbprintf("[!] error, uneven octet! (extra bits!) mask %02x", mask);
         //if (mask < 0x08) k--; // discard the last uneven octet;
         // 0x08 is an assumption - but works quite often
     }
@@ -388,7 +388,7 @@ static int GetIso15693AnswerFromTag(uint8_t *received, int *elapsed) {
     uint32_t time_0 = GetCountSspClk();
     uint32_t time_stop = 0;
     bool getNext = false;
-    int counter = 0, ci = 0, cq = 0;
+    int counter = 0, ci, cq = 0;
     uint8_t *buf = BigBuf_malloc(SIGNAL_BUFF_SIZE);
 
     if (elapsed) *elapsed = 0;
@@ -438,7 +438,7 @@ static int GetIso15693AnswerFromTag(uint8_t *received, int *elapsed) {
 static int GetIso15693AnswerFromSniff(uint8_t *received, int *samples, int *elapsed) {
 
     bool getNext = false;
-    int counter = 0, ci = 0, cq = 0;
+    int counter = 0, ci, cq = 0;
     uint32_t time_0 = 0, time_stop = 0;
     uint8_t *buf = BigBuf_get_addr();
 
@@ -485,7 +485,7 @@ static int GetIso15693AnswerFromSniff(uint8_t *received, int *samples, int *elap
 //-----------------------------------------------------------------------------
 void AcquireRawAdcSamplesIso15693(void) {
     int c = 0, getNext = false;
-    int ci = 0, cq = 0;
+    int ci, cq = 0;
 
     FpgaDownloadAndGo(FPGA_BITSTREAM_HF);
     SetAdcMuxFor(GPIO_MUXSEL_HIPKD);
@@ -552,7 +552,7 @@ void AcquireRawAdcSamplesIso15693(void) {
 void RecordRawAdcSamplesIso15693(void) {
 
     int c = 0, getNext = false;
-    int ci = 0, cq = 0;
+    int ci, cq = 0;
 
     Iso15693InitReader();
 
@@ -621,18 +621,18 @@ void Iso15693InitReader(void) {
 
 // Encode (into the ToSend buffers) an identify request, which is the first
 // thing that you must send to a tag to get a response.
-// It expects "out" to be at least CMD_ID_RESP large
-static void BuildIdentifyRequest(uint8_t *out) {
+// It expects "cmdout" to be at least CMD_ID_RESP large
+static void BuildIdentifyRequest(uint8_t *cmdout) {
     uint8_t cmd[CMD_ID_RESP] = {0, ISO15_CMD_INVENTORY, 0, 0, 0};
     // flags
     cmd[0] = ISO15_REQ_SUBCARRIER_SINGLE | ISO15_REQ_DATARATE_HIGH | ISO15_REQ_INVENTORY | ISO15_REQINV_SLOT1;
     // no mask
     cmd[2] = 0x00;
     // CRC
-    AddCrc(cmd, 3);
+    AddCrc15(cmd, 3);
     // coding as high speed (1 out of 4)
     CodeIso15693AsReader(cmd, CMD_ID_RESP);
-    memcpy(out, cmd, CMD_ID_RESP);
+    memcpy(cmdout, cmd, CMD_ID_RESP);
 }
 
 // uid is in transmission order (which is reverse of display order)
@@ -658,7 +658,7 @@ static void BuildReadBlockRequest(uint8_t **out, uint8_t *uid, uint8_t blockNumb
     // Block number to read
     cmd[10] = blockNumber;//0x00;
     // CRC
-    AddCrc(cmd, 11);
+    AddCrc15(cmd, 11);
     CodeIso15693AsReader(cmd, CMD_READ_RESP);
     memcpy(out, cmd, CMD_ID_RESP);
 }
@@ -666,7 +666,7 @@ static void BuildReadBlockRequest(uint8_t **out, uint8_t *uid, uint8_t blockNumb
 
 // Now the VICC>VCD responses when we are simulating a tag
 // It expects "out" to be at least CMD_INV_RESP large
-static void BuildInventoryResponse(uint8_t *out, uint8_t *uid) {
+static void BuildInventoryResponse(uint8_t *cmdout, uint8_t *uid) {
 
     uint8_t cmd[CMD_INV_RESP] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
@@ -685,9 +685,9 @@ static void BuildInventoryResponse(uint8_t *out, uint8_t *uid) {
     cmd[8] = uid[1]; //0x05;
     cmd[9] = uid[0]; //0xe0;
     // CRC
-    AddCrc(cmd, 10);
+    AddCrc15(cmd, 10);
     CodeIso15693AsReader(cmd, CMD_INV_RESP);
-    memcpy(out, cmd, CMD_INV_RESP);
+    memcpy(cmdout, cmd, CMD_INV_RESP);
 }
 
 // Universal Method for sending to and recv bytes from a tag
@@ -736,9 +736,9 @@ int SendDataTag(uint8_t *send, int sendlen, bool init, int speed, uint8_t *outda
 // Decodes a message from a tag and displays its metadata and content
 #define DBD15STATLEN 48
 void DbdecodeIso15693Answer(int len, uint8_t *d) {
-    char status[DBD15STATLEN + 1] = {0};
 
     if (len > 3) {
+        char status[DBD15STATLEN + 1] = {0};
         if (d[0] & (1 << 3))
             strncat(status, "ProtExt ", DBD15STATLEN - strlen(status));
         if (d[0] & 1) {
@@ -780,12 +780,12 @@ void DbdecodeIso15693Answer(int len, uint8_t *d) {
             strncat(status, "No error ", DBD15STATLEN - strlen(status));
         }
 
-        if (CheckCrc(d, len))
+        if (CheckCrc15(d, len))
             strncat(status, "[+] crc OK", DBD15STATLEN - strlen(status));
         else
             strncat(status, "[!] crc fail", DBD15STATLEN - strlen(status));
 
-        if (MF_DBGLEVEL >= MF_DBG_ERROR) Dbprintf("%s", status);
+        if (DBGLEVEL >= DBG_ERROR) Dbprintf("%s", status);
     }
 }
 
@@ -802,9 +802,6 @@ void DbdecodeIso15693Answer(int len, uint8_t *d) {
 void ReaderIso15693(uint32_t parameter) {
     int answerLen1 = 0;
     int tsamples = 0, wait = 0, elapsed = 0;
-
-    uint8_t uid[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-
     // set up device/fpga
     Iso15693InitReader();
 
@@ -829,6 +826,7 @@ void ReaderIso15693(uint32_t parameter) {
 
     // we should do a better check than this
     if (answerLen1 >= 12) {
+        uint8_t uid[8];
         uid[0] = answer1[9]; // always E0
         uid[1] = answer1[8]; // IC Manufacturer code
         uid[2] = answer1[7];
@@ -838,7 +836,7 @@ void ReaderIso15693(uint32_t parameter) {
         uid[6] = answer1[3];
         uid[7] = answer1[2];
 
-        if (MF_DBGLEVEL >= MF_DBG_EXTENDED) {
+        if (DBGLEVEL >= DBG_EXTENDED) {
             Dbprintf("[+] UID = %02X%02X%02X%02X%02X%02X%02X%02X",
                      uid[0], uid[1], uid[2], uid[3],
                      uid[4], uid[5], uid[5], uid[6]
@@ -849,10 +847,10 @@ void ReaderIso15693(uint32_t parameter) {
         // arg1 = len of response (12 bytes)
         // arg2 = rtf
         // asbytes = uid.
-        cmd_send(CMD_ACK, 1, sizeof(uid), 0, uid, sizeof(uid));
+        reply_old(CMD_ACK, 1, sizeof(uid), 0, uid, sizeof(uid));
     }
 
-    if (MF_DBGLEVEL >= MF_DBG_EXTENDED) {
+    if (DBGLEVEL >= DBG_EXTENDED) {
         Dbprintf("[+] %d octets read from IDENTIFY request:", answerLen1);
         DbdecodeIso15693Answer(answerLen1, answer1);
         Dbhexdump(answerLen1, answer1, true);
@@ -875,8 +873,8 @@ void SimTagIso15693(uint32_t parameter, uint8_t *uid) {
 
     LED_A_ON();
 
-    uint32_t time_start = 0;
-    int ans = 0, samples = 0, tsamples = 0;
+    uint32_t time_start;
+    int samples = 0, tsamples = 0;
     int wait = 0, elapsed = 0;
 
     Dbprintf("ISO-15963 Simulating uid: %02X%02X%02X%02X%02X%02X%02X%02X", uid[0], uid[1], uid[2], uid[3], uid[4], uid[5], uid[6], uid[7]);
@@ -891,11 +889,11 @@ void SimTagIso15693(uint32_t parameter, uint8_t *uid) {
     uint8_t cmd[CMD_INV_RESP] = {0};
     BuildInventoryResponse(cmd, uid);
 
-    while (!BUTTON_PRESS() && !usb_poll_validate_length()) {
+    while (!BUTTON_PRESS() && !data_available()) {
         WDT_HIT();
 
         // Listen to reader
-        ans = GetIso15693AnswerFromSniff(buf, &samples, &elapsed) ;
+        int ans = GetIso15693AnswerFromSniff(buf, &samples, &elapsed) ;
 
         // we should do a better check than this
         if (ans >= 1) {
@@ -904,7 +902,7 @@ void SimTagIso15693(uint32_t parameter, uint8_t *uid) {
             TransmitTo15693Reader(ToSend, ToSendMax, &tsamples, &wait);
             LogTrace(cmd, CMD_INV_RESP, time_start << 4, (GetCountSspClk() - time_start) << 4, NULL, true);
 
-            if (MF_DBGLEVEL >= MF_DBG_EXTENDED) {
+            if (DBGLEVEL >= DBG_EXTENDED) {
                 Dbprintf("[+] %d octets read from reader command: %x %x %x %x %x %x %x %x", ans,
                          buf[0], buf[1], buf[2], buf[3],
                          buf[4], buf[5], buf[6], buf[7]
@@ -932,7 +930,7 @@ void BruteforceIso15693Afi(uint32_t speed) {
     data[0] = ISO15_REQ_SUBCARRIER_SINGLE | ISO15_REQ_DATARATE_HIGH | ISO15_REQ_INVENTORY | ISO15_REQINV_SLOT1;
     data[1] = ISO15_CMD_INVENTORY;
     data[2] = 0; // mask length
-    AddCrc(data, 3);
+    AddCrc15(data, 3);
     datalen += 2;
 
     recvlen = SendDataTag(data, datalen, false, speed, buf);
@@ -951,7 +949,7 @@ void BruteforceIso15693Afi(uint32_t speed) {
 
     for (uint16_t i = 0; i < 256; i++) {
         data[2] = i & 0xFF;
-        AddCrc(data, 4);
+        AddCrc15(data, 4);
         datalen += 2;
         recvlen = SendDataTag(data, datalen, false, speed, buf);
         WDT_HIT();
@@ -978,7 +976,7 @@ void DirectTag15693Command(uint32_t datalen, uint32_t speed, uint32_t recv, uint
     uint8_t buf[ISO15_MAX_FRAME];
     memset(buf, 0x00, sizeof(buf));
 
-    if (MF_DBGLEVEL >= MF_DBG_EXTENDED) {
+    if (DBGLEVEL >= DBG_EXTENDED) {
         DbpString("[+] SEND");
         Dbhexdump(datalen, data, true);
     }
@@ -989,15 +987,15 @@ void DirectTag15693Command(uint32_t datalen, uint32_t speed, uint32_t recv, uint
         buflen = (buflen > ISO15_MAX_FRAME) ? ISO15_MAX_FRAME : buflen;
 
         LED_B_ON();
-        cmd_send(CMD_ACK, buflen, 0, 0, buf, buflen);
+        reply_old(CMD_ACK, buflen, 0, 0, buf, buflen);
         LED_B_OFF();
 
-        if (MF_DBGLEVEL >= MF_DBG_EXTENDED) {
+        if (DBGLEVEL >= DBG_EXTENDED) {
             DbpString("[+] RECV");
             DbdecodeIso15693Answer(buflen, buf);
             Dbhexdump(buflen, buf, true);
         }
     } else {
-        cmd_send(CMD_ACK, 1, 0, 0, 0, 0);
+        reply_old(CMD_ACK, 1, 0, 0, 0, 0);
     }
 }

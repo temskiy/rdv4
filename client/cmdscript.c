@@ -39,7 +39,7 @@
 
 static int CmdHelp(const char *Cmd);
 
-int str_ends_with(const char *str, const char *suffix) {
+static int str_ends_with(const char *str, const char *suffix) {
 
     if (str == NULL || suffix == NULL)
         return 0;
@@ -56,7 +56,7 @@ int str_ends_with(const char *str, const char *suffix) {
 /**
  * Utility to check the ending of a string (used to check file suffix)
  */
-bool endsWith(char *base, char *str) {
+static bool endsWith(const char *base, const char *str) {
     int blen = strlen(base);
     int slen = strlen(str);
     return (blen >= slen) && (0 == strcmp(base + blen - slen, str));
@@ -67,7 +67,8 @@ bool endsWith(char *base, char *str) {
 * generate a file listing of the script-directory for files
 * ending with .lua
 */
-int CmdScriptList(const char *Cmd) {
+static int CmdScriptList(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
 
     char const *exedir = get_my_executable_directory();
     if (exedir == NULL)
@@ -101,7 +102,7 @@ int CmdScriptList(const char *Cmd) {
  * @param argv
  * @return
  */
-int CmdScriptRun(const char *Cmd) {
+static int CmdScriptRun(const char *Cmd) {
     // create new Lua state
     lua_State *lua_state;
     lua_state = luaL_newstate();
@@ -125,7 +126,7 @@ int CmdScriptRun(const char *Cmd) {
     int arg_len = 0;
     sscanf(Cmd, "%127s%n %255[^\n\r]%n", script_name, &name_len, arguments, &arg_len);
 
-    char *suffix = "";
+    const char *suffix = "";
     if (!endsWith(script_name, ".lua")) {
         suffix = ".lua";
     }
@@ -166,11 +167,23 @@ int CmdScriptRun(const char *Cmd) {
 }
 
 static command_t CommandTable[] = {
-    {"help",  CmdHelp,          1, "This help"},
-    {"list",  CmdScriptList,    1, "List available scripts"},
-    {"run",   CmdScriptRun,     1, "<name> -- Execute a script"},
-    {NULL, NULL, 0, NULL}
+    {"help",  CmdHelp,          AlwaysAvailable, "This help"},
+    {"list",  CmdScriptList,    AlwaysAvailable, "List available scripts"},
+    {"run",   CmdScriptRun,     AlwaysAvailable, "<name> -- Execute a script"},
+    {NULL, NULL, NULL, NULL}
 };
+
+/**
+ * Shows some basic help
+ * @brief CmdHelp
+ * @param Cmd
+ * @return
+ */
+static int CmdHelp(const char *Cmd) {
+    (void)Cmd; // Cmd is not used so far
+    PrintAndLogEx(NORMAL, "This is a feature to run Lua-scripts. You can place lua-scripts within the scripts/-folder. ");
+    return 0;
+}
 
 /**
  * Finds a matching script-file
@@ -180,17 +193,6 @@ static command_t CommandTable[] = {
  */
 int CmdScript(const char *Cmd) {
     clearCommandBuffer();
-    CmdsParse(CommandTable, Cmd);
-    return 0;
+    return CmdsParse(CommandTable, Cmd);
 }
 
-/**
- * Shows some basic help
- * @brief CmdHelp
- * @param Cmd
- * @return
- */
-int CmdHelp(const char *Cmd) {
-    PrintAndLogEx(NORMAL, "This is a feature to run Lua-scripts. You can place lua-scripts within the scripts/-folder. ");
-    return 0;
-}

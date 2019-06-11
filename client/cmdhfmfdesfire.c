@@ -8,10 +8,7 @@
 // High frequency MIFARE commands
 //-----------------------------------------------------------------------------
 
-#include "cmdhfmf.h"
-#include "util.h"
-#include <openssl/des.h>
-#include <openssl/aes.h>
+#include "cmdhfmfdesfire.h"
 
 static int CmdHelp(const char *Cmd);
 
@@ -29,7 +26,7 @@ static int CmdHelp(const char *Cmd);
 //n'r=rol(r5)
 //verify n'r=nr
 
-int CmdHF14AMfDESAuth(const char *Cmd) {
+static int CmdHF14AMfDESAuth(const char *Cmd) {
 
     uint8_t blockNo = 0;
     //keyNo=0;
@@ -61,13 +58,12 @@ int CmdHF14AMfDESAuth(const char *Cmd) {
     //DES_set_key((DES_cblock *)key2,&ks2);
 
     //Auth1
-    UsbCommand c = {CMD_MIFARE_DES_AUTH1, {blockNo}};
-    SendCommand(&c);
-    UsbCommand resp;
+    SendCommandMIX(CMD_MIFARE_DES_AUTH1, blockNo, 0, 0, NULL, 0);
+    PacketResponseNG resp;
     if (WaitForResponseTimeout(CMD_ACK, &resp, 1500)) {
-        uint8_t isOK  = resp.arg[0] & 0xff;
-        cuid  = resp.arg[1];
-        uint8_t *data = resp.d.asBytes;
+        uint8_t isOK  = resp.oldarg[0] & 0xff;
+        cuid  = resp.oldarg[1];
+        uint8_t *data = resp.data.asBytes;
 
         if (isOK) {
             PrintAndLogEx(NORMAL, "enc(nc)/b0:%s", sprint_hex(data + 2, 8));
@@ -97,13 +93,11 @@ int CmdHF14AMfDESAuth(const char *Cmd) {
     PrintAndLogEx(NORMAL, "b2:%s", sprint_hex(b2, 8));
 
     //Auth2
-    UsbCommand d = {CMD_MIFARE_DES_AUTH2, {cuid}};
     memcpy(reply, b1, 8);
     memcpy(reply + 8, b2, 8);
-    memcpy(d.d.asBytes, reply, 16);
-    SendCommand(&d);
+    SendCommandOLD(CMD_MIFARE_DES_AUTH2, cuid, 0, 0, reply, sizeof(reply));
 
-    UsbCommand respb;
+    PacketResponseNG respb;
     if (WaitForResponseTimeout(CMD_ACK, &respb, 1500)) {
         uint8_t  isOK  = respb.arg[0] & 0xff;
         uint8_t *data2 = respb.d.asBytes;
@@ -122,7 +116,7 @@ int CmdHF14AMfDESAuth(const char *Cmd) {
 // Card 2 Reader : 02AF, 16 Bytes(b0), CRC1 CRC2
 // Reader 2 Card : 03AF, 16 Bytes(b1),16Bytes(b2) CRC1 CRC2
 // Card 2 Reader : 0300, 16 bytes(b3), CRC1 CRC2 ; success
-int CmdHF14AMfAESAuth(const char *Cmd) {
+static int CmdHF14AMfAESAuth(const char *Cmd) {
 
     uint8_t blockNo = 0;
     //keyNo=0;
@@ -161,13 +155,12 @@ int CmdHF14AMfAESAuth(const char *Cmd) {
     AES_set_decrypt_key(key, 128, &key_d);
 
     //Auth1
-    UsbCommand c = {CMD_MIFARE_DES_AUTH1, {blockNo}};
-    SendCommand(&c);
-    UsbCommand resp;
+    SendCommandMIX(CMD_MIFARE_DES_AUTH1, blockNo, 0, 0, NULL, 0);
+    PacketResponseNG resp;
     if (WaitForResponseTimeout(CMD_ACK, &resp, 1500)) {
-        uint8_t isOK  = resp.arg[0] & 0xff;
-        cuid  = resp.arg[1];
-        uint8_t *data = resp.d.asBytes;
+        uint8_t isOK  = resp.oldarg[0] & 0xff;
+        cuid  = resp.oldarg[1];
+        uint8_t *data = resp.data.asBytes;
 
         if (isOK) {
             PrintAndLogEx(NORMAL, "enc(nc)/b0:%s", sprint_hex(data + 2, 16));
@@ -204,13 +197,11 @@ int CmdHF14AMfAESAuth(const char *Cmd) {
     PrintAndLogEx(NORMAL, "b2:%s", sprint_hex(b2, 16));
 
     //Auth2
-    UsbCommand d = {CMD_MIFARE_DES_AUTH2, {cuid}};
     memcpy(reply, b1, 16);
     memcpy(reply + 16, b2, 16);
-    memcpy(d.d.asBytes, reply, 32);
-    SendCommand(&d);
+    SendCommandOLD(CMD_MIFARE_DES_AUTH2, cuid, 0, 0, reply, sizeof(reply));
 
-    UsbCommand respb;
+    PacketResponseNG respb;
     if (WaitForResponseTimeout(CMD_ACK, &respb, 1500)) {
         uint8_t  isOK  = respb.arg[0] & 0xff;
         uint8_t *data2 = respb.d.asBytes;
@@ -229,21 +220,20 @@ int CmdHF14AMfAESAuth(const char *Cmd) {
 // Menu Stuff
 //------------------------------------
 static command_t CommandTable[] = {
-    {"help",    CmdHelp,            1, "This help"},
-    {"dbg",     CmdHF14AMfDbg,      0, "Set default debug mode"},
-    {"des-auth", CmdHF14AMfDESAuth,  0, "Desfire Authentication"},
-    {"ev1-auth", CmdHF14AMfAESAuth,  0, "EV1 Authentication"},
-    {NULL, NULL, 0, NULL}
+    {"help",     CmdHelp,            AlwaysAvailable, "This help"},
+    {"dbg",      CmdHF14AMfDbg,      IfPm3Iso14443a,  "Set default debug mode"},
+    {"des-auth", CmdHF14AMfDESAuth,  IfPm3Iso14443a,  "Desfire Authentication"},
+    {"ev1-auth", CmdHF14AMfAESAuth,  IfPm3Iso14443a,  "EV1 Authentication"},
+    {NULL, NULL, NULL, NULL}
 };
+
+static int CmdHelp(const char *Cmd) {
+    CmdsHelp(CommandTable);
+    return 0;
+}
 
 int CmdHFMFDesfire(const char *Cmd) {
     // flush
     clearCommandBuffer();
-    CmdsParse(CommandTable, Cmd);
-    return 0;
-}
-
-int CmdHelp(const char *Cmd) {
-    CmdsHelp(CommandTable);
-    return 0;
+    return CmdsParse(CommandTable, Cmd);
 }

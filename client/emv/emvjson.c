@@ -14,7 +14,6 @@
 #include <stdlib.h>
 #include <inttypes.h>
 #include <string.h>
-#include "util.h"
 #include "ui.h"
 #include "proxmark3.h"
 #include "emv_tags.h"
@@ -60,7 +59,7 @@ static const ApplicationDataElm ApplicationData[] = {
 };
 int ApplicationDataLen = sizeof(ApplicationData) / sizeof(ApplicationDataElm);
 
-char *GetApplicationDataName(tlv_tag_t tag) {
+const char *GetApplicationDataName(tlv_tag_t tag) {
     for (int i = 0; i < ApplicationDataLen; i++)
         if (ApplicationData[i].Tag == tag)
             return ApplicationData[i].Name;
@@ -68,7 +67,7 @@ char *GetApplicationDataName(tlv_tag_t tag) {
     return NULL;
 }
 
-int JsonSaveJsonObject(json_t *root, char *path, json_t *value) {
+int JsonSaveJsonObject(json_t *root, const char *path, json_t *value) {
     json_error_t error;
 
     if (strlen(path) < 1)
@@ -76,7 +75,7 @@ int JsonSaveJsonObject(json_t *root, char *path, json_t *value) {
 
     if (path[0] == '$') {
         if (json_path_set(root, path, value, 0, &error)) {
-            PrintAndLog("ERROR: can't set json path: ", error.text);
+            PrintAndLogEx(ERR, "ERROR: can't set json path: ", error.text);
             return 2;
         } else {
             return 0;
@@ -86,15 +85,15 @@ int JsonSaveJsonObject(json_t *root, char *path, json_t *value) {
     }
 }
 
-int JsonSaveInt(json_t *root, char *path, int value) {
+int JsonSaveInt(json_t *root, const char *path, int value) {
     return JsonSaveJsonObject(root, path, json_integer(value));
 }
 
-int JsonSaveStr(json_t *root, char *path, char *value) {
+int JsonSaveStr(json_t *root, const char *path, const char *value) {
     return JsonSaveJsonObject(root, path, json_string(value));
 };
 
-int JsonSaveBufAsHexCompact(json_t *elm, char *path, uint8_t *data, size_t datalen) {
+int JsonSaveBufAsHexCompact(json_t *elm, const char *path, uint8_t *data, size_t datalen) {
     char *msg = sprint_hex_inrow(data, datalen);
     if (msg && strlen(msg) && msg[strlen(msg) - 1] == ' ')
         msg[strlen(msg) - 1] = '\0';
@@ -102,7 +101,7 @@ int JsonSaveBufAsHexCompact(json_t *elm, char *path, uint8_t *data, size_t datal
     return JsonSaveStr(elm, path, msg);
 }
 
-int JsonSaveBufAsHex(json_t *elm, char *path, uint8_t *data, size_t datalen) {
+int JsonSaveBufAsHex(json_t *elm, const char *path, uint8_t *data, size_t datalen) {
     char *msg = sprint_hex(data, datalen);
     if (msg && strlen(msg) && msg[strlen(msg) - 1] == ' ')
         msg[strlen(msg) - 1] = '\0';
@@ -110,7 +109,7 @@ int JsonSaveBufAsHex(json_t *elm, char *path, uint8_t *data, size_t datalen) {
     return JsonSaveStr(elm, path, msg);
 }
 
-int JsonSaveHex(json_t *elm, char *path, uint64_t data, int datalen) {
+int JsonSaveHex(json_t *elm, const char *path, uint64_t data, int datalen) {
     uint8_t bdata[8] = {0};
     int len = 0;
     if (!datalen) {
@@ -130,7 +129,7 @@ int JsonSaveHex(json_t *elm, char *path, uint64_t data, int datalen) {
     return JsonSaveBufAsHex(elm, path, bdata, len);
 }
 
-int JsonSaveTLVValue(json_t *root, char *path, struct tlvdb *tlvdbelm) {
+int JsonSaveTLVValue(json_t *root, const char *path, struct tlvdb *tlvdbelm) {
     const struct tlv *tlvelm = tlvdb_get_tlv(tlvdbelm);
     if (tlvelm)
         return JsonSaveBufAsHex(root, path, (uint8_t *)tlvelm->value, tlvelm->len);
@@ -138,7 +137,7 @@ int JsonSaveTLVValue(json_t *root, char *path, struct tlvdb *tlvdbelm) {
         return 1;
 }
 
-int JsonSaveTLVElm(json_t *elm, char *path, struct tlv *tlvelm, bool saveName, bool saveValue, bool saveAppDataLink) {
+int JsonSaveTLVElm(json_t *elm, const char *path, struct tlv *tlvelm, bool saveName, bool saveValue, bool saveAppDataLink) {
     json_error_t error;
 
     if (strlen(path) < 1 || !tlvelm)
@@ -152,23 +151,23 @@ int JsonSaveTLVElm(json_t *elm, char *path, struct tlv *tlvelm, bool saveName, b
 
             if (json_is_array(elm)) {
                 if (json_array_append_new(elm, obj)) {
-                    PrintAndLog("ERROR: can't append array: %s", path);
+                    PrintAndLogEx(ERR, "ERROR: can't append array: %s", path);
                     return 2;
                 }
             } else {
                 if (json_path_set(elm, path, obj, 0, &error)) {
-                    PrintAndLog("ERROR: can't set json path: ", error.text);
+                    PrintAndLogEx(ERR, "ERROR: can't set json path: ", error.text);
                     return 2;
                 }
             }
         }
 
         if (saveAppDataLink) {
-            char *AppDataName = GetApplicationDataName(tlvelm->tag);
+            const char *AppDataName = GetApplicationDataName(tlvelm->tag);
             if (AppDataName)
                 JsonSaveStr(obj, "appdata", AppDataName);
         } else {
-            char *name = emv_get_tag_name(tlvelm);
+            const char *name = emv_get_tag_name(tlvelm);
             if (saveName && name && strlen(name) > 0 && strncmp(name, "Unknown", 7))
                 JsonSaveStr(obj, "name", emv_get_tag_name(tlvelm));
             JsonSaveHex(obj, "tag", tlvelm->tag, 0);
@@ -182,15 +181,15 @@ int JsonSaveTLVElm(json_t *elm, char *path, struct tlv *tlvelm, bool saveName, b
     return 0;
 }
 
-int JsonSaveTLVTreeElm(json_t *elm, char *path, struct tlvdb *tlvdbelm, bool saveName, bool saveValue, bool saveAppDataLink) {
+int JsonSaveTLVTreeElm(json_t *elm, const char *path, struct tlvdb *tlvdbelm, bool saveName, bool saveValue, bool saveAppDataLink) {
     return JsonSaveTLVElm(elm, path, (struct tlv *)tlvdb_get_tlv(tlvdbelm), saveName, saveValue, saveAppDataLink);
 }
 
-int JsonSaveTLVTree(json_t *root, json_t *elm, char *path, struct tlvdb *tlvdbelm) {
+int JsonSaveTLVTree(json_t *root, json_t *elm, const char *path, struct tlvdb *tlvdbelm) {
     struct tlvdb *tlvp = tlvdbelm;
     while (tlvp) {
         const struct tlv *tlvpelm = tlvdb_get_tlv(tlvp);
-        char *AppDataName = NULL;
+        const char *AppDataName = NULL;
         if (tlvpelm)
             AppDataName = GetApplicationDataName(tlvpelm->tag);
 
@@ -226,7 +225,7 @@ int JsonSaveTLVTree(json_t *root, json_t *elm, char *path, struct tlvdb *tlvdbel
 
             // check
             if (!json_is_array(chjson)) {
-                PrintAndLog("E->Internal logic error. `$.Childs` is not an array.");
+                PrintAndLogEx(ERR, "E->Internal logic error. `$.Childs` is not an array.");
                 break;
             }
 
@@ -239,23 +238,23 @@ int JsonSaveTLVTree(json_t *root, json_t *elm, char *path, struct tlvdb *tlvdbel
     return 0;
 }
 
-bool HexToBuffer(const char *errormsg, const char *hexvalue, uint8_t *buffer, size_t maxbufferlen, size_t *bufferlen) {
+static bool HexToBuffer(const char *errormsg, const char *hexvalue, uint8_t *buffer, size_t maxbufferlen, size_t *bufferlen) {
     int buflen = 0;
 
     switch (param_gethex_to_eol(hexvalue, 0, buffer, maxbufferlen, &buflen)) {
         case 1:
-            PrintAndLog("%s Invalid HEX value.", errormsg);
+            PrintAndLogEx(ERR, "%s Invalid HEX value.", errormsg);
             return false;
         case 2:
-            PrintAndLog("%s Hex value too large.", errormsg);
+            PrintAndLogEx(ERR, "%s Hex value too large.", errormsg);
             return false;
         case 3:
-            PrintAndLog("%s Hex value must have even number of digits.", errormsg);
+            PrintAndLogEx(ERR, "%s Hex value must have even number of digits.", errormsg);
             return false;
     }
 
     if (buflen > maxbufferlen) {
-        PrintAndLog("%s HEX length (%d) more than %d", errormsg, (bufferlen) ? *bufferlen : -1, maxbufferlen);
+        PrintAndLogEx(ERR, "%s HEX length (%d) more than %d", errormsg, (bufferlen) ? *bufferlen : -1, maxbufferlen);
         return false;
     }
 
@@ -265,7 +264,7 @@ bool HexToBuffer(const char *errormsg, const char *hexvalue, uint8_t *buffer, si
     return true;
 }
 
-int JsonLoadStr(json_t *root, char *path, char *value) {
+int JsonLoadStr(json_t *root, const char *path, char *value) {
     if (!value)
         return 1;
 
@@ -282,7 +281,7 @@ int JsonLoadStr(json_t *root, char *path, char *value) {
     return 0;
 }
 
-int JsonLoadBufAsHex(json_t *elm, char *path, uint8_t *data, size_t maxbufferlen, size_t *datalen) {
+int JsonLoadBufAsHex(json_t *elm, const char *path, uint8_t *data, size_t maxbufferlen, size_t *datalen) {
     if (datalen)
         *datalen = 0;
 
@@ -301,7 +300,7 @@ bool ParamLoadFromJson(struct tlvdb *tlv) {
     json_error_t error;
 
     if (!tlv) {
-        PrintAndLog("ERROR load params: tlv tree is NULL.");
+        PrintAndLogEx(ERR, "ERROR load params: tlv tree is NULL.");
         return false;
     }
 
@@ -313,30 +312,30 @@ bool ParamLoadFromJson(struct tlvdb *tlv) {
 
     root = json_load_file(fname, 0, &error);
     if (!root) {
-        PrintAndLog("Load params: json error on line %d: %s", error.line, error.text);
+        PrintAndLogEx(ERR, "Load params: json error on line " _YELLOW_("%d") ": %s", error.line, error.text);
         return false;
     }
 
     if (!json_is_array(root)) {
-        PrintAndLog("Load params: Invalid json format. root must be array.");
+        PrintAndLogEx(ERR, "Load params: Invalid json format. root must be array.");
         return false;
     }
 
-    PrintAndLog("Load params: json(%d) OK", json_array_size(root));
+    PrintAndLogEx(SUCCESS, "Load params: json(%d) " _GREEN_("OK"), json_array_size(root));
 
     for (int i = 0; i < json_array_size(root); i++) {
         json_t *data, *jtag, *jlength, *jvalue;
 
         data = json_array_get(root, i);
         if (!json_is_object(data)) {
-            PrintAndLog("Load params: data [%d] is not an object", i + 1);
+            PrintAndLogEx(ERR, "Load params: data [%d] is not an object", i + 1);
             json_decref(root);
             return false;
         }
 
         jtag = json_object_get(data, "tag");
         if (!json_is_string(jtag)) {
-            PrintAndLog("Load params: data [%d] tag is not a string", i + 1);
+            PrintAndLogEx(ERR, "Load params: data [%d] tag is not a string", i + 1);
             json_decref(root);
             return false;
         }
@@ -344,7 +343,7 @@ bool ParamLoadFromJson(struct tlvdb *tlv) {
 
         jvalue = json_object_get(data, "value");
         if (!json_is_string(jvalue)) {
-            PrintAndLog("Load params: data [%d] value is not a string", i + 1);
+            PrintAndLogEx(ERR, "Load params: data [%d] value is not a string", i + 1);
             json_decref(root);
             return false;
         }
@@ -352,19 +351,19 @@ bool ParamLoadFromJson(struct tlvdb *tlv) {
 
         jlength = json_object_get(data, "length");
         if (!json_is_number(jlength)) {
-            PrintAndLog("Load params: data [%d] length is not a number", i + 1);
+            PrintAndLogEx(ERR, "Load params: data [%d] length is not a number", i + 1);
             json_decref(root);
             return false;
         }
 
         int tlvLength = json_integer_value(jlength);
         if (tlvLength > 250) {
-            PrintAndLog("Load params: data [%d] length more than 250", i + 1);
+            PrintAndLogEx(ERR, "Load params: data [%d] length more than 250", i + 1);
             json_decref(root);
             return false;
         }
 
-        PrintAndLog("TLV param: %s[%d]=%s", tlvTag, tlvLength, tlvValue);
+        PrintAndLogEx(SUCCESS, "TLV param: %s[%d]=%s", tlvTag, tlvLength, tlvValue);
         uint8_t buf[251] = {0};
         size_t buflen = 0;
 
@@ -383,7 +382,7 @@ bool ParamLoadFromJson(struct tlvdb *tlv) {
         }
 
         if (buflen != tlvLength) {
-            PrintAndLog("Load params: data [%d] length of HEX must(%d) be identical to length in TLV param(%d)", i + 1, buflen, tlvLength);
+            PrintAndLogEx(ERR, "Load params: data [%d] length of HEX must(%d) be identical to length in TLV param(%d)", i + 1, buflen, tlvLength);
             json_decref(root);
             return false;
         }
