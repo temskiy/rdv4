@@ -136,7 +136,8 @@ static void SendCommandNG_internal(uint16_t cmd, uint8_t *data, size_t len, bool
     txBufferNG.pre.ng = ng;
     txBufferNG.pre.length = len;
     txBufferNG.pre.cmd = cmd;
-    memcpy(&txBufferNG.data, data, len);
+    if ( len > 0 && data ) 
+        memcpy(&txBufferNG.data, data, len);
 
     if ((conn.send_via_fpc_usart && conn.send_with_crc_on_fpc) || ((!conn.send_via_fpc_usart) && conn.send_with_crc_on_usb)) {
         uint8_t first, second;
@@ -601,8 +602,7 @@ int TestProxmark(void) {
     }
 
     bool error = false;
-    if (len)
-        error = memcmp(data, resp.data.asBytes, len) != 0;
+    error = memcmp(data, resp.data.asBytes, len) != 0;
 
     if (error)
         return PM3_EIO;
