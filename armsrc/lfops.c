@@ -572,7 +572,7 @@ void SimulateTagLowFrequencyEx(int period, int gap, int ledcontrol, int numcycle
 
     int i = 0, x = 0;
     uint8_t *buf = BigBuf_get_addr();
-
+    Dbprintf("[>] BigBuf address %i", BigBuf_get_addr());
     // set frequency,  get values from 'lf config' command
     sample_config *sc = getSamplingConfig();
 
