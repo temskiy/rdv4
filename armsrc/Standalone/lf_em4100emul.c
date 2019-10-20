@@ -19,15 +19,20 @@ int buflen;
 void FillBuff(int bit) {
     int i;
     //set first half the clock bit (all 1's or 0's for a 0 or 1 bit)
-    for (i = 0; i < (int)(CLOCK / 2); ++i)
+    for (i = 0; i < (int)(CLOCK / 2); ++i) {
         BigBuf[buflen++] = bit ;
+		Dbprintf("buf: %i, %i", buflen,BigBuf[buflen-1]);
+	}
     //set second half of the clock bit (all 0's or 1's for a 0 or 1 bit)
-    for (i = (int)(CLOCK / 2); i < CLOCK; ++i)
+    for (i = (int)(CLOCK / 2); i < CLOCK; ++i){
         BigBuf[buflen++] = bit ^ 1;
+		Dbprintf("buf: %i, %i", buflen,BigBuf[buflen-1]);
+	}
+	Dbprintf("Fillbuf buflen: %i, %i", buflen, bit);
 }
 
 void ConstructEM410xEmulBuf(const char *uid) {
-
+	Dbprintf("ConstructEM410xEmulBuf");
     int i, j, binary[4], parity[4];
     uint32_t n;
     /* clear BigBuf */
@@ -82,7 +87,6 @@ void RunMod() {
 	Dbprintf("%i", BigBuf_get_addr());
 	LED(selected, 0);
 	DbpString("[+] now in select mode");
-
 	for (;;) {		
 		WDT_HIT();
 		if (usb_poll_validate_length()) break;
@@ -125,8 +129,9 @@ void RunMod() {
 					Dbprintf("[>] buffer generated from %x slot", selected);
 					FlashLEDs(100,5);
 					Dbprintf("[>] simulate from %x slot", selected);
-					Dbprintf("[>] buflen %i", buflen);
-					SimulateTagLowFrequency(buflen, 0, 1);
+					// Dbprintf("%i", BigBuf_get_addr());
+					// buflen = 4096;
+					// SimulateTagLowFrequencyEx(buflen, 0, 1, 1);
 				}
 			break;
 		}
