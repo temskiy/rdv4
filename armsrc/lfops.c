@@ -562,7 +562,7 @@ void WriteTItag(uint32_t idhi, uint32_t idlo, uint16_t crc) {
 // note:   a call to FpgaDownloadAndGo(FPGA_BITSTREAM_LF) must be done before, but
 //  this may destroy the bigbuf so be sure this is called before calling SimulateTagLowFrequencyEx
 void SimulateTagLowFrequencyEx(int period, int gap, int ledcontrol, int numcycles) {
-
+    Dbprintf("SimulateTagLowFrequencyEx");
     // start us timer
     StartTicks();
 
@@ -572,7 +572,7 @@ void SimulateTagLowFrequencyEx(int period, int gap, int ledcontrol, int numcycle
 
     int i = 0, x = 0;
     uint8_t *buf = BigBuf_get_addr();
-
+    
     // set frequency,  get values from 'lf config' command
     sample_config *sc = getSamplingConfig();
 
@@ -617,7 +617,7 @@ void SimulateTagLowFrequencyEx(int period, int gap, int ledcontrol, int numcycle
             OPEN_COIL();
         else
             SHORT_COIL();
-
+        
         //wait until SSC_CLK goes LOW
         while (AT91C_BASE_PIOA->PIO_PDSR & GPIO_SSC_CLK) {
             WDT_HIT();
@@ -627,7 +627,7 @@ void SimulateTagLowFrequencyEx(int period, int gap, int ledcontrol, int numcycle
             }
             ++check;
         }
-
+        // Dbprintf("%i", buf[i]);
         i++;
         if (i == period) {
             i = 0;

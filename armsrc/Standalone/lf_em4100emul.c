@@ -17,25 +17,26 @@ int buflen;
 
 
 void FillBuff(int bit) {
-    // uint8_t *mem = BigBuf_get_addr();
-    int i;
+	int i;    
     //set first half the clock bit (all 1's or 0's for a 0 or 1 bit)
-    for (i = 0; i < (int)(CLOCK / 2); ++i)
+    for (i = 0; i < (int)(CLOCK / 2); ++i) {
         BigBuf[buflen++] = bit ;
-		// memcpy(mem + buflen, bit, 1);
+		Dbprintf("buf: %i, %i", buflen,BigBuf[buflen-1]);
+	}
     //set second half of the clock bit (all 0's or 1's for a 0 or 1 bit)
-    for (i = (int)(CLOCK / 2); i < CLOCK; ++i)
-		// memcpy(mem + buflen, bit, 1);
+    for (i = (int)(CLOCK / 2); i < CLOCK; ++i){
         BigBuf[buflen++] = bit ^ 1;
-		Dbprintf("%i", bit);
+		Dbprintf("buf: %i, %i", buflen,BigBuf[buflen-1]);
+	}
+	Dbprintf("Fillbuf buflen: %i, %i", buflen, bit);
 }
 
 void ConstructEM410xEmulBuf(const char *uid) {
-
+	Dbprintf("ConstructEM410xEmulBuf");
     int i, j, binary[4], parity[4];
     uint32_t n;
     /* clear BigBuf */
-    BigBuf_Clear_ext(false);
+    BigBuf_Clear_ext(true);
 	buflen = 0;
     /* write 9 start bits */
     for (i = 0; i < 9; i++)
@@ -77,10 +78,9 @@ void RunMod() {
 	int selected = 0;
 	int state = 0; //0 - idle, 1 - read, 2 - sim
 	
-	DbpString("[+] now in ListenReaderField mode");
-	ListenReaderField(1);
+	// DbpString("[+] now in ListenReaderField mode");
+	// ListenReaderField(1);
 	Dbprintf("%i", BigBuf_get_addr());
-	// Dbprintf("%i", *BigBuf);
 	LED(selected + 1, 0);
 	DbpString("[+] now in select mode");
 
@@ -123,8 +123,9 @@ void RunMod() {
 					Dbprintf("[>] buffer generated from %x slot", selected);
 					FlashLEDs(100,5);
 					Dbprintf("[>] simulate from %x slot", selected);
-					Dbprintf("[>] buflen %i", buflen);
-					SimulateTagLowFrequency(buflen, 0, 1);
+					// Dbprintf("%i", BigBuf_get_addr());
+					// buflen = 4096;
+					// SimulateTagLowFrequencyEx(buflen, 0, 1, 1);
 				}
 			break;
 		}
