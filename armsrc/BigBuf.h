@@ -22,6 +22,16 @@
 #define CARD_MEMORY_SIZE        4096
 #define DMA_BUFFER_SIZE         256 //128  (how big is the dma?!?
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
+// BigBuf is the large multi-purpose buffer, typically used to hold A/D samples or traces.
+// Also used to hold various smaller buffers and the Mifare Emulator Memory.
+// declare it as uint32_t to achieve alignment to 4 Byte boundary
+static uint32_t BigBuf[BIGBUF_SIZE / sizeof(uint32_t)];
+
+#pragma GCC diagnostic pop
+
 uint8_t *BigBuf_get_addr(void);
 uint8_t *BigBuf_get_EM_addr(void);
 uint16_t BigBuf_max_traceLen(void);

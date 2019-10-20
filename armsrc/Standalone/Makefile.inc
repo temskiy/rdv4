@@ -33,4 +33,7 @@ endif
 ifneq (,$(findstring WITH_STANDALONE_HF_BOG,$(APP_CFLAGS)))
     SRC_STANDALONE = hf_bog.c
 endif
-
+# WITH_STANDALONE_LF_EM4100EMUL
+ifneq (,$(findstring WITH_STANDALONE_LF_EM4100EMUL,$(APP_CFLAGS)))
+    SRC_STANDALONE = lf_em4100emul.c
+endif
