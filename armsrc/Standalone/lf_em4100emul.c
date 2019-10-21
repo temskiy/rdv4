@@ -51,10 +51,10 @@ void ConstructEM410xEmulBuf(const char *uid) {
     int i, j, binary[4], parity[4];
     uint32_t n;
     /* clear BigBuf */
-    BigBuf_free();
-    BigBuf_Clear();
-    clear_trace();
-    set_tracing(false);
+    // BigBuf_free();
+    // BigBuf_Clear();
+    // clear_trace();
+    // set_tracing(false);
 	buflen = 0;
     /* write 9 start bits */
     for (i = 0; i < 9; i++)
@@ -87,7 +87,7 @@ void ConstructEM410xEmulBuf(const char *uid) {
     FillBuff(parity[3]);
     /* stop bit */
     FillBuff(0);
-	BigBuf_free();
+	// BigBuf_free();
 }
 
 void RunMod() {
