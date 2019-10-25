@@ -8,7 +8,7 @@
 //-----------------------------------------------------------------------------
 // High frequency commands
 //-----------------------------------------------------------------------------
-//#include "cmdhf.h"
+#include "cmdhf.h"
 
 #include <ctype.h>        // tolower
 
@@ -96,7 +96,7 @@ int CmdHFSearch(const char *Cmd) {
             return PM3_SUCCESS;
         }
     }
-    
+
     PROMPT_CLEARLINE;
     PrintAndLogEx(INPLACE, "Searching for ISO15693 tag...");
     if (IfPm3Iso15693()) {
