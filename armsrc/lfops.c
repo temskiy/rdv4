@@ -52,11 +52,11 @@ SAM7S has several timers, we will use the source TIMER_CLOCK1 (aka AT91C_TC_CLKS
  TIMER_CLOCK1 = MCK/2, MCK is running at 48 MHz, Timer is running at 48/2 = 24 MHz
 
 New timer implemenation in ticks.c, which is used in LFOPS.c
-       1us = 1.5ticks
- 1fc = 8us = 12ticks
+       1 μs = 1.5 ticks
+ 1 fc = 8 μs = 12 ticks
 
 Terms you find in different datasheets and how they match.
-1 Cycle = 8 microseconds(us)  == 1 field clock (fc)
+1 Cycle = 8 microseconds (μs)  == 1 field clock (fc)
 
 Note about HITAG timing
 Hitag units (T0) have duration of 8 microseconds (us), which is 1/125000 per second (carrier)
@@ -135,19 +135,30 @@ Initial values if not in flash
    RG = Read gap
 
  Explainations for array T55xx_Timing below
-         SG     WG    Bit 0/00 Bit 1/01  Bit 10  Bit 11  RG
+
+                           0        1       2       3
+         SG     WG    Bit 00   Bit 01  Bit 10  Bit 11   RG
    --------------------------------------------------------------------
         { 29    , 17    , 15    , 47    , 0     , 0     , 15     }, // Default Fixed
-        { 31    , 20    , 18    , 50    , 0     , 0     , 15     }, // Long Leading Ref.
-        { 31    , 20    , 18    , 40    , 0     , 0     , 15     }, // Leading 0
+        { 29    , 17    , 15    , 50    , 0     , 0     , 15     }, // Long Leading Ref.
+        { 29    , 17    , 15    , 40    , 0     , 0     , 15     }, // Leading 0
         { 29    , 17    , 15    , 31    , 47    , 63    , 15     }  // 1 of 4
 */
 t55xx_configurations_t T55xx_Timing  = {
     {
+#ifdef WITH_FLASH
+// PM3RDV4
         { 29 * 8, 17 * 8, 15 * 8, 47 * 8, 15 * 8, 0, 0 },           // Default Fixed
+        { 29 * 8, 17 * 8, 15 * 8, 47 * 8, 15 * 8, 0, 0 },           // Long Leading Ref.
+        { 29 * 8, 17 * 8, 15 * 8, 40 * 8, 15 * 8, 0, 0 },           // Leading 0
+        { 29 * 8, 17 * 8, 15 * 8, 31 * 8, 15 * 8, 47 * 8, 63 * 8 }  // 1 of 4
+#else
+// PM3OTHER or like offical repo
+        { 31 * 8, 20 * 8, 18 * 8, 50 * 8, 15 * 8, 0, 0 },           // Default Fixed
         { 31 * 8, 20 * 8, 18 * 8, 50 * 8, 15 * 8, 0, 0 },           // Long Leading Ref.
         { 31 * 8, 20 * 8, 18 * 8, 40 * 8, 15 * 8, 0, 0 },           // Leading 0
-        { 29 * 8, 17 * 8, 15 * 8, 31 * 8, 15 * 8, 47 * 8, 63 * 8 }  // 1 of 4
+        { 31 * 8, 20 * 8, 18 * 8, 34 * 8, 15 * 8, 50 * 8, 66 * 8 }  // 1 of 4
+#endif
     }
 };
 
@@ -1045,6 +1056,16 @@ static void leadingZeroAskSimBits(int *n, uint8_t clock) {
     memset(dest + (*n), 0, clock * 8);
     *n += clock * 8;
 }
+/*
+static void leadingZeroBiphaseSimBits(int *n, uint8_t clock, uint8_t *phase) {
+    uint8_t *dest = BigBuf_get_addr();
+    for (uint8_t i = 0; i < 8; i++) {
+        memset(dest + (*n), 0 ^ *phase, clock);
+        *phase ^= 1;
+        *n += clock;
+    }
+}
+*/
 
 
 // args clock, ask/man or askraw, invert, transmission separator
@@ -1054,10 +1075,14 @@ void CmdASKsimTAG(uint8_t encoding, uint8_t invert, uint8_t separator, uint8_t c
 
     int n = 0, i = 0;
 
-    leadingZeroAskSimBits(&n, clk);
-
     if (encoding == 2) { //biphase
         uint8_t phase = 0;
+
+// iceman,  if I add this,  the demod includes these extra zero and detection fails.
+// now, I only need to figure out just to add carrier without modulation
+// the old bug, with adding ask zeros messed up the phase variable and deteion failed because of it in LF FDX
+//        leadingZeroBiphaseSimBits(&n, clk, &phase);
+
         for (i = 0; i < size; i++) {
             biphaseSimBit(bits[i] ^ invert, &n, clk, &phase);
         }
@@ -1067,6 +1092,9 @@ void CmdASKsimTAG(uint8_t encoding, uint8_t invert, uint8_t separator, uint8_t c
             }
         }
     } else {  // ask/manchester || ask/raw
+
+        leadingZeroAskSimBits(&n, clk);
+
         for (i = 0; i < size; i++) {
             askSimBit(bits[i] ^ invert, &n, clk, encoding);
         }
@@ -1083,7 +1111,14 @@ void CmdASKsimTAG(uint8_t encoding, uint8_t invert, uint8_t separator, uint8_t c
 
     WDT_HIT();
 
-    Dbprintf("Simulating with clk: %d, invert: %d, encoding: %d, separator: %d, n: %d", clk, invert, encoding, separator, n);
+    Dbprintf("Simulating with clk: %d, invert: %d, encoding: %s (%d), separator: %d, n: %d"
+             , clk
+             , invert
+             , (encoding == 2) ? "BI" : (encoding == 1) ? "ASK" : "RAW"
+             , encoding
+             , separator
+             , n
+            );
 
     if (ledcontrol) LED_A_ON();
     SimulateTagLowFrequency(n, 0, ledcontrol);
@@ -2466,7 +2501,7 @@ void Cotag(uint32_t arg0) {
 
     switch (rawsignal) {
         case 0:
-            doCotagAcquisition(50000);
+            doCotagAcquisition(40000);
             break;
         case 1:
             doCotagAcquisitionManchester();
@@ -2478,7 +2513,7 @@ void Cotag(uint32_t arg0) {
 
     // Turn the field off
     FpgaWriteConfWord(FPGA_MAJOR_MODE_OFF); // field off
-    reply_mix(CMD_ACK, 0, 0, 0, 0, 0);
+    reply_ng(CMD_LF_COTAG_READ, PM3_SUCCESS, NULL, 0);
     LEDsoff();
 }
 

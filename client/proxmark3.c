@@ -33,26 +33,25 @@ static void showBanner(void) {
 
     PrintAndLogEx(NORMAL, "\n");
 #if defined(__linux__) || (__APPLE__) || (_WIN32)
-    PrintAndLogEx(NORMAL, _BLUE_("██████╗ ███╗   ███╗ ████╗ ") "    ...iceman fork");
-    PrintAndLogEx(NORMAL, _BLUE_("██╔══██╗████╗ ████║   ══█║") "      ...dedicated to " _BLUE_("RDV40"));
-    PrintAndLogEx(NORMAL, _BLUE_("██████╔╝██╔████╔██║ ████╔╝"));
-    PrintAndLogEx(NORMAL, _BLUE_("██╔═══╝ ██║╚██╔╝██║   ══█║") "    iceman@icesql.net");
-    PrintAndLogEx(NORMAL, _BLUE_("██║     ██║ ╚═╝ ██║ ████╔╝") "   https://github.com/rfidresearchgroup/proxmark3/");
-    PrintAndLogEx(NORMAL, _BLUE_("╚═╝     ╚═╝     ╚═╝ ╚═══╝ ") "pre-release v4.0");
+    PrintAndLogEx(NORMAL, "  " _BLUE_("██████╗ ███╗   ███╗ ████╗ "));
+    PrintAndLogEx(NORMAL, "  " _BLUE_("██╔══██╗████╗ ████║   ══█║"));
+    PrintAndLogEx(NORMAL, "  " _BLUE_("██████╔╝██╔████╔██║ ████╔╝"));
+    PrintAndLogEx(NORMAL, "  " _BLUE_("██╔═══╝ ██║╚██╔╝██║   ══█║") "    iceman@icesql.net");
+    PrintAndLogEx(NORMAL, "  " _BLUE_("██║     ██║ ╚═╝ ██║ ████╔╝") "   https://github.com/rfidresearchgroup/proxmark3/");
+    PrintAndLogEx(NORMAL, "  " _BLUE_("╚═╝     ╚═╝     ╚═╝ ╚═══╝ ") "pre-release v4.0");
 #else
-    PrintAndLogEx(NORMAL, "======. ===.   ===. ====.     ...iceman fork");
-    PrintAndLogEx(NORMAL, "==...==.====. ====.   ..=.      ...dedicated to RDV40");
-    PrintAndLogEx(NORMAL, "======..==.====.==. ====..");
-    PrintAndLogEx(NORMAL, "==..... ==..==..==.   ..=.    iceman@icesql.net");
-    PrintAndLogEx(NORMAL, "==.     ==. ... ==. ====..   https://github.com/rfidresearchgroup/proxmark3/");
-    PrintAndLogEx(NORMAL, "...     ...     ... .....  pre-release v4.0");
+    PrintAndLogEx(NORMAL, "  ======. ===.   ===. ====.");
+    PrintAndLogEx(NORMAL, "  ==...==.====. ====.   ..=.");
+    PrintAndLogEx(NORMAL, "  ======..==.====.==. ====..");
+    PrintAndLogEx(NORMAL, "  ==..... ==..==..==.   ..=.    iceman@icesql.net");
+    PrintAndLogEx(NORMAL, "  ==.     ==. ... ==. ====..   https://github.com/rfidresearchgroup/proxmark3/");
+    PrintAndLogEx(NORMAL, "  ...     ...     ... .....  pre-release v4.0");
 #endif
-    PrintAndLogEx(NORMAL, "\nSupport iceman on patreon - https://www.patreon.com/iceman1001/");
-    PrintAndLogEx(NORMAL, "                 on paypal - https://www.paypal.me/iceman1001");
+//    PrintAndLogEx(NORMAL, "\nSupport iceman on patreon - https://www.patreon.com/iceman1001/");
+//    PrintAndLogEx(NORMAL, "                 on paypal - https://www.paypal.me/iceman1001");
 //    printf("\nMonero: 43mNJLpgBVaTvyZmX9ajcohpvVkaRy1kbZPm8tqAb7itZgfuYecgkRF36rXrKFUkwEGeZedPsASRxgv4HPBHvJwyJdyvQuP");
-    PrintAndLogEx(NORMAL, "\n");
+    PrintAndLogEx(NORMAL, "");
     fflush(stdout);
-
     g_printAndLog = PRINTANDLOG_PRINT | PRINTANDLOG_LOG;
 }
 
@@ -90,7 +89,7 @@ static FILE *current_cmdscriptfile() {
     return cmdscriptfile[cmdscriptfile_idx];
 }
 
-bool pop_cmdscriptfile() {
+static bool pop_cmdscriptfile() {
     fclose(cmdscriptfile[cmdscriptfile_idx]);
     cmdscriptfile[cmdscriptfile_idx--] = NULL;
     if (cmdscriptfile_idx == 0)
@@ -151,7 +150,7 @@ main_loop(char *script_cmds_file, char *script_cmd, bool stayInCommandLoop) {
     // loops every time enter is pressed...
     while (1) {
         bool printprompt = false;
-        char *prompt = PROXPROMPT;
+        const char *prompt = PROXPROMPT;
 
 check_script:
         // If there is a script file
@@ -321,7 +320,7 @@ static void set_my_executable_path(void) {
     }
 }
 
-static char *my_user_directory = NULL;
+static const char *my_user_directory = NULL;
 
 const char *get_my_user_directory(void) {
     return my_user_directory;
@@ -473,10 +472,15 @@ finish2:
 // Check if windows AnsiColor Support is enabled in the registery
 // [HKEY_CURRENT_USER\Console]
 //     "VirtualTerminalLevel"=dword:00000001
+// 2nd Key needs to be enabled...  This key takes the console out of legacy mode.
+// [HKEY_CURRENT_USER\Console]
+//     "ForceV2"=dword:00000001
 static bool DetectWindowsAnsiSupport(void) {
     bool ret = false;
 #if defined(_WIN32)
     HKEY hKey = NULL;
+    bool virtualTerminalLevelSet = false;
+    bool forceV2Set = false;
 
     if (RegOpenKeyA(HKEY_CURRENT_USER, "Console", &hKey) == ERROR_SUCCESS) {
         DWORD dwType = REG_SZ;
@@ -490,11 +494,31 @@ static bool DetectWindowsAnsiSupport(void) {
                 Data += KeyValue[i] << (8 * i);
 
             if (Data == 1) { // Reg key is set to 1, Ansi Color Enabled
-                ret = true;
+                virtualTerminalLevelSet = true;
             }
         }
         RegCloseKey(hKey);
     }
+
+    if (RegOpenKeyA(HKEY_CURRENT_USER, "Console", &hKey) == ERROR_SUCCESS) {
+        DWORD dwType = REG_SZ;
+        BYTE KeyValue[sizeof(dwType)];
+        DWORD len = sizeof(KeyValue);
+
+        if (RegQueryValueEx(hKey, "ForceV2", NULL, &dwType, KeyValue, &len) != ERROR_FILE_NOT_FOUND) {
+            uint8_t i;
+            uint32_t Data = 0;
+            for (i = 0; i < 4; i++)
+                Data += KeyValue[i] << (8 * i);
+
+            if (Data == 1) { // Reg key is set to 1, Not using legacy Mode.
+                forceV2Set = true;
+            }
+        }
+        RegCloseKey(hKey);
+    }
+    // If both VirtualTerminalLevel and ForceV2 is set, AnsiColor should work
+    ret = virtualTerminalLevelSet && forceV2Set;
 #endif
     return ret;
 }
@@ -782,7 +806,7 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
 
     if (!session.pm3_present)
-        PrintAndLogEx(INFO, "Running in " _YELLOW_("OFFLINE") "mode. Check \"%s -h\" if it's not what you want.\n", exec_name);
+        PrintAndLogEx(INFO, "Running in " _YELLOW_("OFFLINE") "mode. Check " _YELLOW_("\"%s -h\"") " if it's not what you want.\n", exec_name);
 
 #ifdef HAVE_GUI
 

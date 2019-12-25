@@ -31,6 +31,7 @@ void ClearAuthData(void);
 
 uint8_t iso14443A_CRC_check(bool isResponse, uint8_t *d, uint8_t n);
 uint8_t iso14443B_CRC_check(uint8_t *d, uint8_t n);
+uint8_t felica_CRC_check(uint8_t *d, uint8_t n);
 uint8_t mifare_CRC_check(bool isResponse, uint8_t *data, uint8_t len);
 uint8_t iso15693_CRC_check(uint8_t *d, uint8_t n);
 uint8_t iclass_CRC_check(bool isResponse, uint8_t *d, uint8_t n);
@@ -47,6 +48,7 @@ void annotateIso14443b(char *exp, size_t size, uint8_t *cmd, uint8_t cmdsize);
 void annotateIso14443a(char *exp, size_t size, uint8_t *cmd, uint8_t cmdsize);
 void annotateMfDesfire(char *exp, size_t size, uint8_t *cmd, uint8_t cmdsize);
 void annotateMifare(char *exp, size_t size, uint8_t *cmd, uint8_t cmdsize, uint8_t *parity, uint8_t paritysize, bool isResponse);
+void annotateLTO(char *explanation, size_t size, uint8_t *cmd, uint8_t cmdsize);
 
 bool DecodeMifareData(uint8_t *cmd, uint8_t cmdsize, uint8_t *parity, bool isResponse, uint8_t *mfData, size_t *mfDataLen);
 bool NTParityChk(TAuthData *ad, uint32_t ntx);

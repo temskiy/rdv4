@@ -3,12 +3,30 @@ All notable changes to this project will be documented in this file.
 This project uses the changelog in accordance with [keepchangelog](http://keepachangelog.com/). Please use this to write notable changes, which is not the same as git commit log...
 
 ## [unreleased][unreleased]
- - Added hf felica rdunencrypted (@7homasSutter)
- - Added hf felica rqresponse (@7homasSutter)
- - Added hf felica rqservice (@7homasSutter)
+ - Add `hf_bruteforce.lua` - script bruteforces uid for 14a using hf 14a sim (@keld)
+ - Add `tools\pm3_cs8.pl` - convert .pm3 files to wave format (@samyk)
+ - Add `tools\pm3_amii_bin2eml.pl` - amiibo convering script (@samyk)
+ - Chg `hf 14a info` - now detects "static / fixed" nonce tags (@iceman1001)
+ - Chg `data save f <filename> w` - params reworked.  (@iceman1001)
+ - Chg `hf search` - now should detect LTO-CM tags (@iceman1001)
+ - Added `hf lto info` - skeleton support for LTO Cartridge memory (@iceman1001)
+ - Added saving as wave format (@anon)
+ - Added ISO15_WRITE annotation (@pwipiw)
+ - Added `lto_dump.lua` @kevin
+ - Added `hf mf cwipe` magic chinese card (gen1a) wipe to default state (@merlokk)
+ - Added `pm3_mf7b_wipe.py` python script. Wipes magic S70 7B Gen2 card. (@vulnersCom)
+ - Added `hf mfp chk` Mifare plus command for check keys from public keys list, from dictionary or 1 and 2-byte bruteforce (@merlokk)
+ - Change `hf 15` - some refactoring (@grspy)
+ - Added `hf 15 writeafi` and `hf 15 writedsfid` (@grspy)
+ - Added detailed info for SLIX2 tags in `hf 15 info` (@grspy)
+ - Fix `hf list felica` and `hf felica sniff` (@7homasSutter)
+ - Added `hf felica wrunencrypted` (@7homasSutter)
+ - Added `hf felica rdunencrypted` (@7homasSutter)
+ - Added `hf felica rqresponse` (@7homasSutter)
+ - Added `hf felica rqservice` (@7homasSutter)
  - Added polling for felica standard (@7homasSutter)
- - Added lf t55xx dump save and lf t55xx restore for .bin and .eml files (@mwalker33)
- - Added lf t55xx detected to try without password first (@mwalker33)
+ - Added `lf t55xx dump save` and `lf t55xx restore` for .bin and .eml files (@mwalker33)
+ - Added `lf t55xx detected` to try without password first (@mwalker33)
  - Chg `lf indala read` - added indala 26bit decoding (@martinbeier)
  - Chg `lf t55xx detect` to try without password first (@mwalker33)
  - Display high bit for detected Kastle HIDs to allow `lf hid clone [id]` to work properly (@swg0101)
@@ -370,6 +388,7 @@ This project uses the changelog in accordance with [keepchangelog](http://keepac
  - Added  `hf fido` `assert` and `make` commands from fido2 protocol (authenticatorMakeCredential and authenticatorGetAssertion) (@merlokk)
  - Added trailer block decoding to `hf mf rdbl` and `hf mf cgetbl` (@merlokk)
  - Added `hf mf mad` and `hf mfp mad` MAD decode, check and print commands (@merlokk)
+ - Add `script run luxeodump` (@0xdrrb)
 
 
 ### Fixed

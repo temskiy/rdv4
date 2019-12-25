@@ -24,7 +24,6 @@
 #include "mfkey.h"
 #include "util_posix.h"  // msclock
 
-
 int mfDarkside(uint8_t blockno, uint8_t key_type, uint64_t *key) {
     uint32_t uid = 0;
     uint32_t nt = 0, nr = 0, ar = 0;
@@ -361,7 +360,10 @@ int mfnested(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_t trgBlockNo,
     clearCommandBuffer();
     SendCommandNG(CMD_HF_MIFARE_NESTED, (uint8_t *)&payload, sizeof(payload));
 
-    if (!WaitForResponseTimeout(CMD_HF_MIFARE_NESTED, &resp, 1500)) return PM3_ETIMEOUT;
+    if (!WaitForResponseTimeout(CMD_HF_MIFARE_NESTED, &resp, 2000)) {
+        SendCommandNG(CMD_BREAK_LOOP, NULL, 0);
+        return PM3_ETIMEOUT;
+    }
 
     if (resp.status != PM3_SUCCESS)
         return PM3_ESOFT;
@@ -476,7 +478,7 @@ int mfnested(uint8_t blockNo, uint8_t keyType, uint8_t *key, uint8_t trgBlockNo,
             free(statelists[1].head.slhead);
             num_to_bytes(key64, 6, resultKey);
 
-            PrintAndLogEx(SUCCESS, "target block:%3u key type: %c  -- found valid key [%012" PRIx64 "]",
+            PrintAndLogEx(SUCCESS, "target block:%3u key type: %c  -- found valid key [ %012" PRIx64 " ]",
                           (uint16_t)resp.oldarg[2] & 0xff,
                           (resp.oldarg[2] >> 8) ? 'B' : 'A',
                           key64
@@ -613,6 +615,50 @@ int mfCSetUID(uint8_t *uid, uint8_t *atqa, uint8_t *sak, uint8_t *oldUID, uint8_
     if (oldUID == NULL) params |= MAGIC_UID;
 
     return mfCSetBlock(0, block0, oldUID, params);
+}
+
+int mfCWipe(uint8_t *uid, uint8_t *atqa, uint8_t *sak) {
+    uint8_t block0[16] = {0x01, 0x02, 0x03, 0x04, 0x04, 0x08, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xBE, 0xAF};
+    uint8_t blockD[16] = {0x00};
+    uint8_t blockK[16] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x08, 0x77, 0x8F, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    uint8_t params = MAGIC_SINGLE;
+
+    if (uid != NULL) {
+        memcpy(block0, uid, 4);
+        block0[4] = block0[0] ^ block0[1] ^ block0[2] ^ block0[3];
+    }
+    if (sak != NULL)
+        block0[5] = sak[0];
+
+    if (atqa != NULL) {
+        block0[6] = atqa[1];
+        block0[7] = atqa[0];
+    }
+    int res;
+    for (int blockNo = 0; blockNo < 4 * 16; blockNo++) {
+        for (int retry = 0; retry < 3; retry++) {
+            if (blockNo == 0) {
+                res = mfCSetBlock(blockNo, block0, NULL, params);
+            } else {
+                if (mfIsSectorTrailer(blockNo))
+                    res = mfCSetBlock(blockNo, blockK, NULL, params);
+                else
+                    res = mfCSetBlock(blockNo, blockD, NULL, params);
+            }
+
+            if (res == PM3_SUCCESS)
+                break;
+            PrintAndLogEx(WARNING, "Retry block[%d]...", blockNo);
+        }
+
+        if (res) {
+            PrintAndLogEx(ERR, "Error setting block[%d]: %d", blockNo, res);
+            return res;
+        }
+    }
+    DropField();
+
+    return PM3_SUCCESS;
 }
 
 int mfCSetBlock(uint8_t blockNo, uint8_t *data, uint8_t *uid, uint8_t params) {
@@ -1086,6 +1132,34 @@ int detect_classic_nackbug(bool verbose) {
     }
     return PM3_SUCCESS;
 }
+
+/* Detect Mifare Classic Static / Fixed nonce
+detects special magic cards that has a static / fixed nonce
+returns:
+0  = has normal nonce
+1  = has static/fixed nonce
+2  = cmd failed
+*/
+int detect_classic_static_nonce(void) {
+
+    clearCommandBuffer();
+    SendCommandNG(CMD_HF_MIFARE_STATIC_NONCE, NULL, 0);
+    PacketResponseNG resp;
+
+    if (WaitForResponseTimeout(CMD_HF_MIFARE_STATIC_NONCE, &resp, 500)) {
+
+        if (resp.status == PM3_ESOFT)
+            return 2;
+
+        if (resp.data.asBytes[0] == 0)
+            return 0;
+
+        if (resp.data.asBytes[0] != 0)
+            return 1;
+    }
+    return 2;
+}
+
 /* try to see if card responses to "chinese magic backdoor" commands. */
 void detect_classic_magic(void) {
 
