@@ -239,6 +239,14 @@ typedef struct {
     uint8_t data[];
 } PACKED lf_psksim_t;
 
+// For CMD_LF_NRZ_SIMULATE (NRZ)
+typedef struct {
+    uint8_t invert;
+    uint8_t separator;
+    uint8_t clock;
+    uint8_t data[];
+} PACKED lf_nrzsim_t;
+
 typedef struct {
     uint8_t blockno;
     uint8_t keytype;
@@ -288,6 +296,7 @@ typedef struct {
 #define CMD_STANDALONE                                                    0x0115
 #define CMD_WTX                                                           0x0116
 #define CMD_TIA                                                           0x0117
+#define CMD_BREAK_LOOP                                                    0x0118
 
 // RDV40, Flash memory operations
 #define CMD_FLASHMEM_WRITE                                                0x0121
@@ -370,12 +379,13 @@ typedef struct {
 #define CMD_LF_EM4X_READWORD                                              0x0218
 #define CMD_LF_EM4X_WRITEWORD                                             0x0219
 #define CMD_LF_IO_DEMOD                                                   0x021A
-#define CMD_LF_EM410X_DEMOD                                               0x021c
+#define CMD_LF_EM410X_DEMOD                                               0x021C
 // Sampling configuration for LF reader/sniffer
-#define CMD_LF_SAMPLING_SET_CONFIG                                        0x021d
+#define CMD_LF_SAMPLING_SET_CONFIG                                        0x021D
 #define CMD_LF_FSK_SIMULATE                                               0x021E
 #define CMD_LF_ASK_SIMULATE                                               0x021F
 #define CMD_LF_PSK_SIMULATE                                               0x0220
+#define CMD_LF_NRZ_SIMULATE                                               0x0232
 #define CMD_LF_AWID_DEMOD                                                 0x0221
 #define CMD_LF_VIKING_CLONE                                               0x0222
 #define CMD_LF_T55XX_WAKEUP                                               0x0224
@@ -506,6 +516,10 @@ typedef struct {
 #define CMD_HF_DESFIRE_COMMAND                                            0x072e
 
 #define CMD_HF_MIFARE_NACK_DETECT                                         0x0730
+#define CMD_HF_MIFARE_STATIC_NONCE                                        0x0731
+
+// MFU OTP TearOff
+#define CMD_HF_MFU_OTP_TEAROFF                                            0x0740
 
 #define CMD_HF_SNIFF                                                      0x0800
 
@@ -547,6 +561,8 @@ typedef struct {
 
 // Error codes                          Usages:
 
+// Success, transfer nonces            pm3:        Sending nonces back to client
+#define PM3_SNONCES             1
 // Success (no error)
 #define PM3_SUCCESS             0
 
@@ -584,15 +600,18 @@ typedef struct {
 #define PM3_EWRONGANSVER      -16
 // Memory out-of-bounds error           client/pm3: error when a read/write is outside the expected array
 #define PM3_EOUTOFBOUND       -17
+// exchange with card error             client/pm3: error when cant get answer from card or got an incorrect answer
+#define PM3_ECARDEXCHANGE     -18
 // No data                              pm3:        no data available, no host frame available (not really an error)
 #define PM3_ENODATA           -98
 // Quit program                         client:     reserved, order to quit the program
 #define PM3_EFATAL            -99
 
 // LF
-#define LF_DIVISOR(f) (((12000 + (f)/2)/(f))-1)
-#define LF_DIVISOR_125 LF_DIVISOR(125)
-#define LF_DIVISOR_134 LF_DIVISOR(134)
+#define LF_FREQ2DIV(f) ((int)(((12000.0 + (f)/2.0)/(f))-1))
+#define LF_DIVISOR_125 LF_FREQ2DIV(125)
+#define LF_DIVISOR_134 LF_FREQ2DIV(134.2)
+#define LF_DIV2FREQ(d) (12000.0/((d)+1))
 
 // Receiving from USART need more than 30ms as we used on USB
 // else we get errors about partial packet reception

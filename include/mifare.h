@@ -169,6 +169,71 @@ typedef struct {
     uint8_t servicecode[2];
 } PACKED felica_card_select_t;
 
+typedef struct {
+    uint8_t sync[2];
+    uint8_t length[1];
+    uint8_t cmd_code[1];
+    uint8_t IDm[8];
+} PACKED felica_frame_response_t;
+
+typedef struct {
+    uint8_t status_flag1[1];
+    uint8_t status_flag2[1];
+} PACKED felica_status_flags_t;
+
+typedef struct {
+    felica_frame_response_t frame_response;
+    uint8_t node_number[1];
+    uint8_t node_key_versions[2];
+} PACKED felica_request_service_response_t;
+
+typedef struct {
+    felica_frame_response_t frame_response;
+    uint8_t mode[1];
+} PACKED felica_request_request_response_t;
+
+typedef struct {
+    felica_frame_response_t frame_response;
+    felica_status_flags_t status_flags;
+    uint8_t number_of_block[1];
+    uint8_t block_data[16];
+    uint8_t block_element_number[1];
+} PACKED felica_read_without_encryption_response_t;
+
+typedef struct {
+    felica_frame_response_t frame_response;
+    felica_status_flags_t status_flags;
+} PACKED felica_status_response_t;
+
+typedef struct {
+    felica_frame_response_t frame_response;
+    uint8_t number_of_systems[1];
+    uint8_t system_code_list[32];
+} PACKED felica_syscode_response_t;
+
+typedef struct {
+    felica_frame_response_t frame_response;
+    felica_status_flags_t status_flags;
+    uint8_t format_version[1];
+    uint8_t basic_version[2];
+    uint8_t number_of_option[1];
+    uint8_t option_version_list[4];
+} PACKED felica_request_spec_response_t;
+
+typedef struct {
+    felica_frame_response_t frame_response;
+    uint8_t m2c[8];
+    uint8_t m3c[8];
+} PACKED felica_auth1_response_t;
+
+typedef struct {
+    uint8_t code[1];
+    uint8_t IDtc[8];
+    uint8_t IDi[8];
+    uint8_t PMi[8];
+} PACKED felica_auth2_response_t;
+
+
 typedef enum FELICA_COMMAND {
     FELICA_CONNECT = (1 << 0),
     FELICA_NO_DISCONNECT = (1 << 1),

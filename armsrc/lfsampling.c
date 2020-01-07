@@ -104,7 +104,7 @@ void LFSetupFPGAForADC(int divisor, bool lf_field) {
     else
         FpgaSendCommand(FPGA_CMD_SET_DIVISOR, divisor);
 
-    FpgaWriteConfWord(FPGA_MAJOR_MODE_LF_ADC | (lf_field ? FPGA_LF_ADC_READER_FIELD : 0));
+    FpgaWriteConfWord(FPGA_MAJOR_MODE_LF_READER | (lf_field ? FPGA_LF_ADC_READER_FIELD : 0));
 
     // Connect the A/D to the peak-detected low-frequency path.
     SetAdcMuxFor(GPIO_MUXSEL_LOPKD);
@@ -374,8 +374,8 @@ void doT55x7Acquisition(size_t sample_size) {
 
 #define COTAG_T1 384
 #define COTAG_T2 (COTAG_T1>>1)
-#define COTAG_ONE_THRESHOLD 128+30
-#define COTAG_ZERO_THRESHOLD 128-30
+#define COTAG_ONE_THRESHOLD 128+10
+#define COTAG_ZERO_THRESHOLD 128-10
 #ifndef COTAG_BITS
 #define COTAG_BITS 264
 #endif
@@ -437,6 +437,11 @@ void doCotagAcquisition(size_t sample_size) {
                 dest[i] = dest[i - 1];
         }
     }
+
+    // Ensure that DC offset removal and noise check is performed for any device-side processing
+    removeSignalOffset(dest, bufsize);
+    computeSignalProperties(dest, bufsize);
+
 }
 
 uint32_t doCotagAcquisitionManchester() {

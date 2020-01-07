@@ -55,6 +55,7 @@ char *sprint_ascii_ex(const uint8_t *data, const size_t len, const size_t min_st
 
 void print_blocks(uint32_t *data, size_t len);
 
+int hex_to_bytes(const char *hexValue, uint8_t *bytesValue, size_t maxBytesValueLen);
 void num_to_bytebits(uint64_t n, size_t len, uint8_t *dest);
 void num_to_bytebitsLSBF(uint64_t n, size_t len, uint8_t *dest);
 uint8_t *SwapEndian64(const uint8_t *src, const size_t len, const uint8_t blockSize);
@@ -68,6 +69,7 @@ uint8_t param_get8(const char *line, int paramnum);
 uint8_t param_get8ex(const char *line, int paramnum, int deflt, int base);
 uint32_t param_get32ex(const char *line, int paramnum, int deflt, int base);
 uint64_t param_get64ex(const char *line, int paramnum, int deflt, int base);
+float param_getfloat(const char *line, int paramnum, float deflt);
 uint8_t param_getdec(const char *line, int paramnum, uint8_t *destination);
 uint8_t param_isdec(const char *line, int paramnum);
 int param_gethex(const char *line, int paramnum, uint8_t *data, int hexcnt);
@@ -97,6 +99,7 @@ bool str_endswith(const char *s,  const char *suffix);    // check for suffix in
 void clean_ascii(unsigned char *buf, size_t len);
 void strcleanrn(char *buf, size_t len);
 void strcreplace(char *buf, size_t len, char from, char to);
-char *strmcopy(const char *buf);
+char *str_dup(const char *src);
+char *str_ndup(const char *src, size_t len);
 int hexstring_to_u96(uint32_t *hi2, uint32_t *hi, uint32_t *lo, const char *str);
 #endif

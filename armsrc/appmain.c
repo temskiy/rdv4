@@ -175,7 +175,7 @@ void MeasureAntennaTuning(void) {
      */
 
     FpgaDownloadAndGo(FPGA_BITSTREAM_LF);
-    FpgaWriteConfWord(FPGA_MAJOR_MODE_LF_ADC | FPGA_LF_ADC_READER_FIELD);
+    FpgaWriteConfWord(FPGA_MAJOR_MODE_LF_READER | FPGA_LF_ADC_READER_FIELD);
     SpinDelay(50);
 
     for (uint8_t i = 255; i >= 19; i--) {
@@ -696,10 +696,25 @@ static void PacketReceived(PacketCommandNG *packet) {
     */
 
     switch (packet->cmd) {
-        case CMD_QUIT_SESSION:
+        case CMD_BREAK_LOOP:
+            break;
+        case CMD_QUIT_SESSION: {
             reply_via_fpc = false;
             reply_via_usb = false;
             break;
+        }
+        // emulator
+        case CMD_SET_DBGMODE: {
+            DBGLEVEL = packet->data.asBytes[0];
+            Dbprintf("Debug level: %d", DBGLEVEL);
+            reply_ng(CMD_SET_DBGMODE, PM3_SUCCESS, NULL, 0);
+            break;
+        }
+        // always available
+        case CMD_HF_DROPFIELD: {
+            hf_field_off();
+            break;
+        }
 #ifdef WITH_LF
         case CMD_LF_T55XX_SET_CONFIG: {
             setT55xxConfig(packet->oldarg[0], (t55xx_configurations_t *) packet->data.asBytes);
@@ -760,7 +775,12 @@ static void PacketReceived(PacketCommandNG *packet) {
         }
         case CMD_LF_PSK_SIMULATE: {
             lf_psksim_t *payload = (lf_psksim_t *)packet->data.asBytes;
-            CmdPSKsimTag(payload->carrier, payload->invert, payload->clock, packet->length - sizeof(lf_psksim_t), payload->data, true);
+            CmdPSKsimTAG(payload->carrier, payload->invert, payload->clock, packet->length - sizeof(lf_psksim_t), payload->data, true);
+            break;
+        }
+        case CMD_LF_NRZ_SIMULATE: {
+            lf_nrzsim_t *payload = (lf_nrzsim_t *)packet->data.asBytes;
+            CmdNRZsimTAG(payload->invert, payload->separator, payload->clock, packet->length - sizeof(lf_nrzsim_t), payload->data, true);
             break;
         }
         case CMD_LF_HID_CLONE: {
@@ -1034,12 +1054,6 @@ static void PacketReceived(PacketCommandNG *packet) {
         }
 #endif
 
-// always available
-        case CMD_HF_DROPFIELD: {
-            hf_field_off();
-            break;
-        }
-
 #ifdef WITH_ISO14443a
         case CMD_HF_ISO14443A_SNIFF: {
             SniffIso14443a(packet->data.asBytes[0]);
@@ -1155,13 +1169,6 @@ static void PacketReceived(PacketCommandNG *packet) {
             Mifare1ksim(payload->flags, payload->exitAfter, payload->uid, payload->atqa, payload->sak);
             break;
         }
-        // emulator
-        case CMD_SET_DBGMODE: {
-            DBGLEVEL = packet->data.asBytes[0];
-            Dbprintf("Debug level: %d", DBGLEVEL);
-            reply_ng(CMD_SET_DBGMODE, PM3_SUCCESS, NULL, 0);
-            break;
-        }
         case CMD_HF_MIFARE_EML_MEMCLR: {
             MifareEMemClr();
             reply_ng(CMD_HF_MIFARE_EML_MEMCLR, PM3_SUCCESS, NULL, 0);
@@ -1243,6 +1250,14 @@ static void PacketReceived(PacketCommandNG *packet) {
         }
         case CMD_HF_MIFARE_NACK_DETECT: {
             DetectNACKbug();
+            break;
+        }
+        case CMD_HF_MFU_OTP_TEAROFF: {
+            MifareU_Otp_Tearoff();
+            break;
+        }
+        case CMD_HF_MIFARE_STATIC_NONCE: {
+            MifareHasStaticNonce();
             break;
         }
 #endif
@@ -1508,7 +1523,7 @@ static void PacketReceived(PacketCommandNG *packet) {
                 case 1: // MEASURE_ANTENNA_TUNING_LF_START
                     // Let the FPGA drive the low-frequency antenna around 125kHz
                     FpgaDownloadAndGo(FPGA_BITSTREAM_LF);
-                    FpgaWriteConfWord(FPGA_MAJOR_MODE_LF_ADC | FPGA_LF_ADC_READER_FIELD);
+                    FpgaWriteConfWord(FPGA_MAJOR_MODE_LF_READER | FPGA_LF_ADC_READER_FIELD);
                     FpgaSendCommand(FPGA_CMD_SET_DIVISOR, packet->data.asBytes[1]);
                     reply_ng(CMD_MEASURE_ANTENNA_TUNING_LF, PM3_SUCCESS, NULL, 0);
                     break;
@@ -1588,10 +1603,19 @@ static void PacketReceived(PacketCommandNG *packet) {
                 BigBuf_Clear_ext(false);
                 BigBuf_free();
             }
+            
+            // 40 000 - (512-3) 509 = 39491
             uint16_t offset = MIN(BIGBUF_SIZE - PM3_CMD_DATA_SIZE - 3, payload->offset);
 
+            // need to copy len bytes of data, not PM3_CMD_DATA_SIZE - 3 - offset
+            // ensure len bytes copied wont go past end of bigbuf
+            uint16_t len = MIN(BIGBUF_SIZE - offset, PM3_CMD_DATA_SIZE - 3);
+
             uint8_t *mem = BigBuf_get_addr();
-            memcpy(mem + offset, &payload->data, PM3_CMD_DATA_SIZE - 3 - offset);
+
+            // x + 394
+            memcpy(mem + offset, &payload->data, len);
+            // memcpy(mem + offset, &payload->data, PM3_CMD_DATA_SIZE - 3 - offset);
             reply_ng(CMD_LF_UPLOAD_SIM_SAMPLES, PM3_SUCCESS, NULL, 0);
             break;
         }

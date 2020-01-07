@@ -213,7 +213,7 @@ static int usage_lf_tune(void) {
     return PM3_SUCCESS;
 }
 
-int CmdLFTune(const char *Cmd) {
+static int CmdLFTune(const char *Cmd) {
     int iter = 0;
     uint8_t divisor =  LF_DIVISOR_125;//Frequency divisor
     bool errors = false;
@@ -231,12 +231,12 @@ int CmdLFTune(const char *Cmd) {
                 }
                 break;
             case 'f': {
-                int freq = param_get32ex(Cmd, cmdp + 1, 125, 10);
-                divisor = LF_DIVISOR(freq);
-                if (divisor < 19) {
+                float freq = param_getfloat(Cmd, cmdp + 1, 125);
+                if ((freq < 47) || (freq > 600)) {
                     PrintAndLogEx(ERR, "freq must be between 47 and 600");
                     return PM3_EINVARG;
                 }
+                divisor = LF_FREQ2DIV(freq);
                 cmdp += 2;
                 break;
             }
@@ -254,7 +254,7 @@ int CmdLFTune(const char *Cmd) {
     //Validations
     if (errors) return usage_lf_tune();
 
-    PrintAndLogEx(SUCCESS, "Measuring LF antenna at %.2f kHz, click button or press Enter to exit", 12000.0 / (divisor + 1));
+    PrintAndLogEx(SUCCESS, "Measuring LF antenna at %.2f kHz, click button or press Enter to exit", LF_DIV2FREQ(divisor));
 
     uint8_t params[] = {1, 0};
     params[1] = divisor;
@@ -498,7 +498,7 @@ int CmdLFConfig(const char *Cmd) {
                 break;
             case 'f': {
                 int freq = param_get32ex(Cmd, cmdp + 1, 125, 10);
-                divisor = LF_DIVISOR(freq);
+                divisor = LF_FREQ2DIV(freq);
                 if (divisor < 19) {
                     PrintAndLogEx(ERR, "freq must be between 47 and 600");
                     return PM3_EINVARG;
@@ -798,7 +798,7 @@ int CmdLFfskSim(const char *Cmd) {
 
     size_t size = DemodBufferLen;
     if (size > (PM3_CMD_DATA_SIZE - sizeof(lf_fsksim_t))) {
-        PrintAndLogEx(NORMAL, "DemodBuffer too long for current implementation - length: %zu - max: %zu", size, PM3_CMD_DATA_SIZE - sizeof(lf_fsksim_t));
+        PrintAndLogEx(WARNING, "DemodBuffer too long for current implementation - length: %zu - max: %zu", size, PM3_CMD_DATA_SIZE - sizeof(lf_fsksim_t));
         size = PM3_CMD_DATA_SIZE - sizeof(lf_fsksim_t);
     }
 
@@ -900,7 +900,7 @@ int CmdLFaskSim(const char *Cmd) {
 
     size_t size = DemodBufferLen;
     if (size > (PM3_CMD_DATA_SIZE - sizeof(lf_asksim_t))) {
-        PrintAndLogEx(NORMAL, "DemodBuffer too long for current implementation - length: %zu - max: %zu", size, PM3_CMD_DATA_SIZE - sizeof(lf_asksim_t));
+        PrintAndLogEx(WARNING, "DemodBuffer too long for current implementation - length: %zu - max: %zu", size, PM3_CMD_DATA_SIZE - sizeof(lf_asksim_t));
         size = PM3_CMD_DATA_SIZE - sizeof(lf_asksim_t);
     }
 
@@ -993,13 +993,13 @@ int CmdLFpskSim(const char *Cmd) {
     if (errors) return usage_lf_simpsk();
 
     if (dataLen == 0) { //using DemodBuffer
-        PrintAndLogEx(NORMAL, "Getting Clocks");
+        PrintAndLogEx(INFO, "Getting Clocks");
 
         if (clk == 0) clk = GetPskClock("", false);
-        PrintAndLogEx(NORMAL, "clk: %d", clk);
+        PrintAndLogEx(INFO, "clk: %d", clk);
 
         if (!carrier) carrier = GetPskCarrier("", false);
-        PrintAndLogEx(NORMAL, "carrier: %d", carrier);
+        PrintAndLogEx(INFO, "carrier: %d", carrier);
 
     } else {
         setDemodBuff(data, dataLen, 0);
@@ -1015,12 +1015,12 @@ int CmdLFpskSim(const char *Cmd) {
             //need to convert psk2 to psk1 data before sim
             psk2TOpsk1(DemodBuffer, DemodBufferLen);
         } else {
-            PrintAndLogEx(NORMAL, "Sorry, PSK3 not yet available");
+            PrintAndLogEx(WARNING, "Sorry, PSK3 not yet available");
         }
     }
     size_t size = DemodBufferLen;
     if (size > (PM3_CMD_DATA_SIZE - sizeof(lf_psksim_t))) {
-        PrintAndLogEx(NORMAL, "DemodBuffer too long for current implementation - length: %zu - max: %zu", size, PM3_CMD_DATA_SIZE - sizeof(lf_psksim_t));
+        PrintAndLogEx(WARNING, "DemodBuffer too long for current implementation - length: %zu - max: %zu", size, PM3_CMD_DATA_SIZE - sizeof(lf_psksim_t));
         size = PM3_CMD_DATA_SIZE - sizeof(lf_psksim_t);
     }
 
@@ -1054,10 +1054,9 @@ int CmdLFSimBidir(const char *Cmd) {
     return PM3_SUCCESS;
 }
 
-// ICEMAN,  todo,   swap from Graphbuffer.
-// according to  Westhus this demod uses decimated samples / 2.
-// need to do complete rewrite.  Need access to reader / chip
-// should be extracted to seperate files aswell
+// ICEMAN,  Verichip is Animal tag.  Tested against correct reader
+/*
+
 int CmdVchDemod(const char *Cmd) {
 
     if (GraphTraceLen < 4096) {
@@ -1080,6 +1079,8 @@ int CmdVchDemod(const char *Cmd) {
         1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,
         1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
     };
+
+    // iceman, using correlate as preamble detect seems way better than our current memcompare
 
     // So first, we correlate for the sync pattern, and mark that.
     int bestCorrel = 0, bestPos = 0;
@@ -1135,6 +1136,7 @@ int CmdVchDemod(const char *Cmd) {
     }
     return PM3_SUCCESS;
 }
+*/
 
 static bool CheckChipType(bool getDeviceData) {
 
@@ -1168,6 +1170,7 @@ out:
 }
 
 int CmdLFfind(const char *Cmd) {
+    int retval = PM3_SUCCESS;
     int ans = 0;
     size_t minLength = 2000;
     char cmdp = tolower(param_getchar(Cmd, 0));
@@ -1208,7 +1211,7 @@ int CmdLFfind(const char *Cmd) {
             }
 
             if (readMotorolaUid()) {
-                PrintAndLogEx(SUCCESS, "\nValid " _GREEN_("Motorola ID") "found!");
+                PrintAndLogEx(SUCCESS, "\nValid " _GREEN_("Motorola FlexPass ID") "found!");
                 return PM3_SUCCESS;
             }
 
@@ -1250,7 +1253,6 @@ int CmdLFfind(const char *Cmd) {
     if (demodGallagher() == PM3_SUCCESS)       { PrintAndLogEx(SUCCESS, "\nValid " _GREEN_("GALLAGHER ID") "found!"); goto out;}
 //    if (demodTI() == PM3_SUCCESS)              { PrintAndLogEx(SUCCESS, "\nValid " _GREEN_("Texas Instrument ID") "found!"); goto out;}
     //if (demodFermax() == PM3_SUCCESS)          { PrintAndLogEx(SUCCESS, "\nValid " _GREEN_("Fermax ID") "found!"); goto out;}
-    //if (demodFlex() == PM3_SUCCESS)            { PrintAndLogEx(SUCCESS, "\nValid " _GREEN_("Motorola FlexPass ID") "found!"); goto out;}
 
     PrintAndLogEx(FAILED, _RED_("No known 125/134 kHz tags found!"));
 
@@ -1291,12 +1293,15 @@ int CmdLFfind(const char *Cmd) {
 
         PrintAndLogEx(FAILED, _RED_("\nNo data found!"));
     }
+
+    retval = PM3_ESOFT;
+
 out:
     // identify chipset
     if (CheckChipType(isOnline) == false) {
         PrintAndLogEx(DEBUG, "Automatic chip type detection " _RED_("failed"));
     }
-    return PM3_SUCCESS;
+    return retval;
 }
 
 static command_t CommandTable[] = {
@@ -1340,7 +1345,7 @@ static command_t CommandTable[] = {
     {"sniff",       CmdLFSniff,         IfPm3Lf,         "Sniff LF traffic between reader and tag"},
     {"tune",        CmdLFTune,          IfPm3Lf,         "Continuously measure LF antenna tuning"},
 //    {"vchdemod",    CmdVchDemod,        AlwaysAvailable, "['clone'] -- Demodulate samples for VeriChip"},
-    {"flexdemod",   CmdFlexdemod,       AlwaysAvailable, "Demodulate samples for Motorola FlexPass"},
+//    {"flexdemod",   CmdFlexdemod,       AlwaysAvailable, "Demodulate samples for Motorola FlexPass"},
     {NULL, NULL, NULL, NULL}
 };
 
