@@ -16,7 +16,7 @@
 #include "util.h"
 #include "dbprint.h"
 #include "ticks.h"
-
+#include "string.h"
 #include "BigBuf.h"
 #define OPTS 16
 #define CLOCK 64
@@ -35,12 +35,14 @@ void FillBuff(int bit) {
     int i;
     //set first half the clock bit (all 1's or 0's for a 0 or 1 bit)
     for (i = 0; i < (int)(CLOCK / 2); ++i) {
-        BigBuf[buflen++] = bit ;
+        memset (BigBuf_get_addr() + buflen++, bit,1);
+		// BigBuf[buflen++] = bit ;
 		Dbprintf("buf: %i, %i", buflen,BigBuf[buflen-1]);
 	}
     //set second half of the clock bit (all 0's or 1's for a 0 or 1 bit)
     for (i = (int)(CLOCK / 2); i < CLOCK; ++i){
-        BigBuf[buflen++] = bit ^ 1;
+		memset (BigBuf_get_addr() + buflen++, bit^1,1);
+        // BigBuf[buflen++] = bit ^ 1;
 		Dbprintf("buf: %i, %i", buflen,BigBuf[buflen-1]);
 	}
 	Dbprintf("Fillbuf buflen: %i, %i", buflen, bit);
@@ -50,12 +52,7 @@ void ConstructEM410xEmulBuf(const char *uid) {
 	Dbprintf("ConstructEM410xEmulBuf");
     int i, j, binary[4], parity[4];
     uint32_t n;
-    /* clear BigBuf */
-    // BigBuf_free();
-    // BigBuf_Clear();
-    // clear_trace();
-    // set_tracing(false);
-	buflen = 0;
+ 	buflen = 0;
     /* write 9 start bits */
     for (i = 0; i < 9; i++)
         FillBuff(1);
@@ -87,7 +84,6 @@ void ConstructEM410xEmulBuf(const char *uid) {
     FillBuff(parity[3]);
     /* stop bit */
     FillBuff(0);
-	// BigBuf_free();
 }
 
 void RunMod() {
@@ -98,7 +94,7 @@ void RunMod() {
 	
 	// DbpString("[+] now in ListenReaderField mode");
 	// ListenReaderField(1);
-	Dbprintf("%i", BigBuf_get_addr());
+	Dbprintf("BigBuf addr: %i", BigBuf_get_addr());
 	LED(selected, 0);
 	DbpString("[+] now in select mode");
 	for (;;) {		
@@ -130,6 +126,7 @@ void RunMod() {
                 Dbprintf("[+] recorded to %i slot", selected);
 				FlashLEDs(100,5);
 				DbpString("[+] select mode");
+				BigBuf_Clear();
 				state = 0;
 			break;
 			case 2:
