@@ -1,6 +1,5 @@
 //-----------------------------------------------------------------------------
-// Samy Kamkar, 2012
-// Christian Herrmann, 2017
+// Artyom Gnatyuk, 2020
 //
 // This code is licensed to you under the terms of the GNU GPL, version 2 or,
 // at your option, any later version. See the LICENSE.txt file for the text of
@@ -18,40 +17,31 @@
 #include "ticks.h"
 #include "string.h"
 #include "BigBuf.h"
-#define OPTS 16
+
+#define SLOT_COUNT 16
 #define CLOCK 64
-uint64_t low[OPTS];
-uint32_t high[OPTS];
-char str[11];
+
+uint64_t low[SLOT_COUNT];
+uint32_t high[SLOT_COUNT];
+uint8_t *bba;
 int buflen;
-
-
 
 void ModInfo(void) {
     DbpString("  LF EM4100 emulation standalone");
 }
 
-void FillBuff(int bit) {
-    int i;
-    //set first half the clock bit (all 1's or 0's for a 0 or 1 bit)
-    for (i = 0; i < (int)(CLOCK / 2); ++i) {
-        memset (BigBuf_get_addr() + buflen++, bit,1);
-		// BigBuf[buflen++] = bit ;
-		Dbprintf("buf: %i, %i", buflen,BigBuf[buflen-1]);
-	}
-    //set second half of the clock bit (all 0's or 1's for a 0 or 1 bit)
-    for (i = (int)(CLOCK / 2); i < CLOCK; ++i){
-		memset (BigBuf_get_addr() + buflen++, bit^1,1);
-        // BigBuf[buflen++] = bit ^ 1;
-		Dbprintf("buf: %i, %i", buflen,BigBuf[buflen-1]);
-	}
-	Dbprintf("Fillbuf buflen: %i, %i", buflen, bit);
+void FillBuff(uint8_t bit) {
+//set first half the clock bit (all 1's or 0's for a 0 or 1 bit)
+    memset (bba + buflen, bit, CLOCK / 2);
+	buflen += (CLOCK / 2);
+//set second half of the clock bit (all 0's or 1's for a 0 or 1 bit)
+	memset (bba + buflen, bit^1,CLOCK / 2);
+	buflen += (CLOCK / 2);
 }
-
-void ConstructEM410xEmulBuf(const char *uid) {
-	Dbprintf("ConstructEM410xEmulBuf");
+void ConstructEM410xEmulBuf(uint64_t id) {
+// void ConstructEM410xEmulBuf(const char *uid) {
+	Dbprintf("buf: %i", id);
     int i, j, binary[4], parity[4];
-    uint32_t n;
  	buflen = 0;
     /* write 9 start bits */
     for (i = 0; i < 9; i++)
@@ -61,9 +51,10 @@ void ConstructEM410xEmulBuf(const char *uid) {
     for (i = 0; i < 10; i++) {
         /* read each hex char */
         // sscanf(&uid[i], "%1lx", &n);
-		n = hex2int(uid[i]);
-        for (j = 3; j >= 0; j--, n /= 2)
-            binary[j] = n % 2;
+		// n = hex2int(uid[i]);
+		// n = id;
+        for (j = 3; j >= 0; j--, id /= 2)
+            binary[j] = id % 2;
         /* append each bit */
         FillBuff(binary[0]);
         FillBuff(binary[1]);
@@ -94,15 +85,13 @@ void RunMod() {
 	
 	// DbpString("[+] now in ListenReaderField mode");
 	// ListenReaderField(1);
-	Dbprintf("BigBuf addr: %i", BigBuf_get_addr());
+	bba = BigBuf_get_addr();
+	Dbprintf("BigBuf addr: %i", bba );
 	LED(selected, 0);
 	DbpString("[+] now in select mode");
 	for (;;) {		
 		WDT_HIT();
-
-        // exit from SamyRun,   send a usbcommand.
         if (data_available()) break;
-
 		int button_pressed = BUTTON_HELD(1000);
 		SpinDelay(300);
 		switch (state){
@@ -113,7 +102,7 @@ void RunMod() {
 					DbpString("[+] record/simulate mode");
 					state = 2;
 				} else if (button_pressed < 0) {
-					selected = (selected + 1) % OPTS;
+					selected = (selected + 1) % SLOT_COUNT;
 					LEDsoff();
 					LED(selected, 0);
 					Dbprintf("[=] selected %x slot", selected);
@@ -122,7 +111,6 @@ void RunMod() {
 			case 1:
 				CmdEM410xdemod(1, &high[selected], &low[selected], 0);
 				// sprintf(str, "%02lx%08lx", (uint32_t) (low[selected] >> 32), (uint32_t) low[selected]);
-				// Dbprintf("[+] recorded to %i slot %s", selected, str);
                 Dbprintf("[+] recorded to %i slot", selected);
 				FlashLEDs(100,5);
 				DbpString("[+] select mode");
@@ -139,13 +127,10 @@ void RunMod() {
 				} else if (button_pressed < 0) {
 					LED(selected + 1, 0);
 					Dbprintf("[>] prepare for sim from %x slot", selected);
-					ConstructEM410xEmulBuf(str);
-					// buflen = 4096;
+					ConstructEM410xEmulBuf(low[selected]);
 					Dbprintf("[>] buffer generated from %x slot", selected);
 					FlashLEDs(100,5);
 					Dbprintf("[>] simulate from %x slot", selected);
-					// Dbprintf("%i", BigBuf_get_addr());
-					// buflen = 4096;
 					SimulateTagLowFrequency(buflen, 0, 1);
 				}
 			break;
