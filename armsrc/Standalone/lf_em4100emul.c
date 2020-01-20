@@ -5,7 +5,7 @@
 // at your option, any later version. See the LICENSE.txt file for the text of
 // the license.
 //-----------------------------------------------------------------------------
-// main code for LF emul
+// main code for LF emul V1
 //-----------------------------------------------------------------------------
 #include "standalone.h" // standalone definitions
 #include "proxmark3_arm.h"
@@ -18,73 +18,67 @@
 #include "string.h"
 #include "BigBuf.h"
 
-#define SLOT_COUNT 16
+#define MAX_IND 16
 #define CLOCK 64
 
-uint64_t low[SLOT_COUNT];
-uint32_t high[SLOT_COUNT];
-uint8_t *bba;
+uint64_t low[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+uint32_t high[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+uint8_t *bba,slots_count;
 int buflen;
 
 void ModInfo(void) {
-    DbpString("  LF EM4100 emulation standalone");
+    DbpString("  LF EM4100 emulation standalone V1");
 }
 
 void FillBuff(uint8_t bit) {
-//set first half the clock bit (all 1's or 0's for a 0 or 1 bit)
     memset (bba + buflen, bit, CLOCK / 2);
 	buflen += (CLOCK / 2);
-//set second half of the clock bit (all 0's or 1's for a 0 or 1 bit)
 	memset (bba + buflen, bit^1,CLOCK / 2);
 	buflen += (CLOCK / 2);
 }
 void ConstructEM410xEmulBuf(uint64_t id) {
-// void ConstructEM410xEmulBuf(const char *uid) {
 	Dbprintf("buf: %i", id);
     int i, j, binary[4], parity[4];
  	buflen = 0;
-    /* write 9 start bits */
     for (i = 0; i < 9; i++)
         FillBuff(1);
-    /* for each hex char */
     parity[0] = parity[1] = parity[2] = parity[3] = 0;
     for (i = 0; i < 10; i++) {
-        /* read each hex char */
-        // sscanf(&uid[i], "%1lx", &n);
-		// n = hex2int(uid[i]);
-		// n = id;
         for (j = 3; j >= 0; j--, id /= 2)
             binary[j] = id % 2;
-        /* append each bit */
         FillBuff(binary[0]);
         FillBuff(binary[1]);
         FillBuff(binary[2]);
         FillBuff(binary[3]);
-        /* append parity bit */
         FillBuff(binary[0] ^ binary[1] ^ binary[2] ^ binary[3]);
-        /* keep track of column parity */
         parity[0] ^= binary[0];
         parity[1] ^= binary[1];
         parity[2] ^= binary[2];
         parity[3] ^= binary[3];
     }
-    /* parity columns */
     FillBuff(parity[0]);
     FillBuff(parity[1]);
     FillBuff(parity[2]);
     FillBuff(parity[3]);
-    /* stop bit */
     FillBuff(0);
+}
+
+uint64_t ReversBits(uint64_t bits){
+	uint64_t result = 0;
+	for (int i = 0; i < 64; i++){
+		result *=2;
+		result += bits % 2;
+		bits /= 2;
+	}
+	return result;
 }
 
 void RunMod() {
     StandAloneMode();
     FpgaDownloadAndGo(FPGA_BITSTREAM_LF);
-    int selected = 0;
-	int state = 0; //0 - idle, 1 - read, 2 - sim
-	
-	// DbpString("[+] now in ListenReaderField mode");
-	// ListenReaderField(1);
+	int selected = 0;
+	uint8_t state = 0; //0 - idle, 1 - read, 2 - sim
+	slots_count = sizeof(low)/sizeof(low[0]);
 	bba = BigBuf_get_addr();
 	Dbprintf("BigBuf addr: %i", bba );
 	LED(selected, 0);
@@ -102,9 +96,9 @@ void RunMod() {
 					DbpString("[+] record/simulate mode");
 					state = 2;
 				} else if (button_pressed < 0) {
-					selected = (selected + 1) % SLOT_COUNT;
+					selected = (selected + 1) % slots_count;
 					LEDsoff();
-					LED(selected, 0);
+					LED(selected % MAX_IND, 0);
 					Dbprintf("[=] selected %x slot", selected);
 				} 
 			break;
@@ -121,13 +115,13 @@ void RunMod() {
 				if (button_pressed > 0) {
 					SpinDown(100);
 					SpinOff(100);
-					LED(selected, 0);
+					LED(selected % MAX_IND, 0);
 					Dbprintf("[<] read to %x slot", selected);
 					state = 1;
 				} else if (button_pressed < 0) {
-					LED(selected + 1, 0);
+					LED(selected % MAX_IND, 0);
 					Dbprintf("[>] prepare for sim from %x slot", selected);
-					ConstructEM410xEmulBuf(low[selected]);
+					ConstructEM410xEmulBuf(ReversBits(low[selected]));
 					Dbprintf("[>] buffer generated from %x slot", selected);
 					FlashLEDs(100,5);
 					Dbprintf("[>] simulate from %x slot", selected);
