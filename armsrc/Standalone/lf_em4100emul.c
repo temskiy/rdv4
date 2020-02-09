@@ -18,17 +18,19 @@
 #include "string.h"
 #include "BigBuf.h"
 
-#define MAX_IND 16
-#define CLOCK 64
+#define MAX_IND 16 // 4 LEDs - 2^4 binary
+#define CLOCK 64 //for 125kHz
 
-uint64_t low[] = {0x565AF781C7,0x540053E4E2,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-uint32_t high[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+// low & high - array for storage IDs. Its length must be equal. If you want 
+// to set predefined IDs set its in low. 
+uint64_t low[] = {0x565AF781C7,0x540053E4E2,0,0};
+uint32_t high[] = {0,0,0,0};
 uint8_t *bba,slots_count;
 int buflen;
-uint64_t buf;
+
 
 void ModInfo(void) {
-    DbpString("  LF EM4100 emulation standalone V1");
+    DbpString("  LF EM4100 read/emulate standalone V1");
 }
 
 uint64_t ReversQuads(uint64_t bits){
@@ -66,17 +68,22 @@ void ConstructEM410xEmulBuf(uint64_t id) {
     FillBuff(0);
 }
 
+void LED_Slot(int i) {
+	if (slots_count > 4) {
+		LED(i % MAX_IND, 0); //binary indication, usefully for slots > 4
+	} else {
+		LED(2^i,0); //simple indication for slots <=4
+	}
+}
+
 void RunMod() {
     StandAloneMode();
     FpgaDownloadAndGo(FPGA_BITSTREAM_LF);
 	int selected = 0;
-	uint8_t state = 0; //0 - idle, 1 - read, 2 - sim
+	uint8_t state = 0; //0 - select, 1 - read, 2 - sim
 	slots_count = sizeof(low)/sizeof(low[0]);
 	bba = BigBuf_get_addr();
-	// Dbprintf("BigBuf addr: %x", bba );
-	// Dbprintf("low addr: %x", &low );
-	// Dbprintf("buf addr: %x", &buf );
-	LED(selected, 0);
+	LED_Slot(selected);
 	DbpString("[+] now in select mode");
 	for (;;) {		
 		WDT_HIT();
@@ -93,7 +100,7 @@ void RunMod() {
 				} else if (button_pressed < 0) {
 					selected = (selected + 1) % slots_count;
 					LEDsoff();
-					LED(selected % MAX_IND, 0);
+					LED_Slot(selected);
 					Dbprintf("[=] selected slot %x", selected);
 				} 
 			break;
@@ -102,18 +109,17 @@ void RunMod() {
                 Dbprintf("[+] recorded to slot %x", selected);
 				FlashLEDs(100,5);
 				DbpString("[+] select mode");
-				BigBuf_Clear();
 				state = 0;
 			break;
 			case 2:
 				if (button_pressed > 0) {
 					SpinDown(100);
 					SpinOff(100);
-					LED(selected % MAX_IND, 0);
+					LED_Slot(selected);
 					Dbprintf("[<] read to slot %x", selected);
 					state = 1;
 				} else if (button_pressed < 0) {
-					LED(selected % MAX_IND, 0);
+					LED_Slot(selected);
 					Dbprintf("[>] prepare for sim from slot %x", selected);
 					ConstructEM410xEmulBuf(ReversQuads(low[selected]));
 					Dbprintf("[>] buffer generated from slot %x", selected);
