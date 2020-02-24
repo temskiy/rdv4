@@ -5,9 +5,14 @@
 // at your option, any later version. See the LICENSE.txt file for the text of
 // the license.
 //-----------------------------------------------------------------------------
-// main code for LF emul V1
+// LF emul V2 - This mode can simulate tag ID from selected slot and read tag ID
+//              to selected slot and to flash (only RDV4). Also you can set 
+//              predefined IDs in any slot.
+//              To recall stored ID from flash execute:
+//                  mem dump o offset l 5 p
+//              where offset = 5 * selected slot
 //-----------------------------------------------------------------------------
-#include "standalone.h" // standalone definitions
+#include "standalone.h"
 #include "proxmark3_arm.h"
 #include "appmain.h"
 #include "fpgaloader.h"
@@ -18,19 +23,23 @@
 #include "string.h"
 #include "BigBuf.h"
 
+#ifdef WITH_FLASH
+#include "flashmem.h"
+#endif
+
 #define MAX_IND 16 // 4 LEDs - 2^4 combinations
 #define CLOCK 64 //for 125kHz
 
-// low & high - array for storage IDs. Its length must be equal. If you want 
-// to set predefined IDs set its in low. 
-uint64_t low[] = {0x565AF781C7,0x540053E4E2,0,0};
-uint32_t high[] = {0,0,0,0};
+// low & high - array for storage IDs. Its length must be equal.
+// Predefined IDs must be stored in low[]. 
+// In high[] must be nulls
+uint64_t low[] = {0x565AF781C7,0x540053E4E2,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+uint32_t high[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 uint8_t *bba,slots_count;
 int buflen;
 
-
 void ModInfo(void) {
-    DbpString("  LF EM4100 read/emulate standalone V1");
+    DbpString("  LF EM4100 simulate standalone V2");
 }
 
 uint64_t ReversQuads(uint64_t bits){
@@ -47,6 +56,7 @@ void FillBuff(uint8_t bit) {
 	memset (bba + buflen, bit^1,CLOCK / 2);
 	buflen += (CLOCK / 2);
 }
+
 void ConstructEM410xEmulBuf(uint64_t id) {
 	
     int i, j, binary[4], parity[4];
@@ -76,15 +86,38 @@ void LED_Slot(int i) {
 	}
 }
 
+void FlashLEDs(uint32_t speed, uint8_t times) {
+    for (int i = 0; i < times * 2; i++) {
+        LED_A_INV();
+        LED_B_INV();
+        LED_C_INV();
+        LED_D_INV();
+        SpinDelay(speed);
+    }
+}
+
+#ifdef WITH_FLASH
+void SaveIDtoFlash (int addr, uint64_t id) {
+	uint8_t b, *ptr;
+	for (int i = 0; i < 5; i++) {
+		b = (uint8_t) (id >>  8 * i & 0xff);
+		ptr = &b;
+		Flash_WriteData(addr * 5 + 4 - i,ptr,1);
+	}
+}
+#endif
+
 void RunMod() {
     StandAloneMode();
     FpgaDownloadAndGo(FPGA_BITSTREAM_LF);
 	int selected = 0;
-	uint8_t state = 0; //0 - select, 1 - read, 2 - sim
+	//state 0 - select slot,
+	//      1 - read tag to selected slot, 
+	//      2 - simulate tag from selected slot
+	uint8_t state = 0; 
 	slots_count = sizeof(low)/sizeof(low[0]);
 	bba = BigBuf_get_addr();
 	LED_Slot(selected);
-	DbpString("[+] now in select mode");
 	for (;;) {		
 		WDT_HIT();
         if (data_available()) break;
@@ -92,41 +125,44 @@ void RunMod() {
 		SpinDelay(300);
 		switch (state){
 			case 0:
+				// Select mode
 				if (button_pressed == 1) {
+					// Long press - switch to simulate mode
 					SpinUp(100);
 					SpinOff(100);
-					DbpString("[+] record/simulate mode");
 					state = 2;
 				} else if (button_pressed < 0) {
+					// Click - switch to next slot
 					selected = (selected + 1) % slots_count;
 					LEDsoff();
 					LED_Slot(selected);
-					Dbprintf("[=] selected slot %x", selected);
 				} 
 			break;
 			case 1:
+				// Read mode. Click - exit to select mode
 				CmdEM410xdemod(1, &high[selected], &low[selected], 0);
-                Dbprintf("[+] recorded to slot %x", selected);
 				FlashLEDs(100,5);
-				DbpString("[+] select mode");
+				#ifdef WITH_FLASH
+				SaveIDtoFlash(selected, low[selected]);
+				#endif
 				state = 0;
 			break;
 			case 2:
+				// Simulate mode
 				if (button_pressed > 0) {
+					// Long press - switch to read mode
 					SpinDown(100);
 					SpinOff(10);
 					LED_Slot(selected);
-					Dbprintf("[<] read to slot %x", selected);
 					state = 1;
 				} else if (button_pressed < 0) {
+					// Click - start simulating. Click again to exit from simelate mode
 					LED_Slot(selected);
-					Dbprintf("[>] prepare for sim from slot %x", selected);
 					ConstructEM410xEmulBuf(ReversQuads(low[selected]));
-					Dbprintf("[>] buffer generated from slot %x", selected);
 					FlashLEDs(100,5);
-					Dbprintf("[>] simulate from slot %x", selected);
 					SimulateTagLowFrequency(buflen, 0, 1);
 					LED_Slot(selected);
+					state = 0; // Switch to select mode
 				}
 			break;
 		}

@@ -179,16 +179,6 @@ void SpinUp(uint32_t speed) {
     LED_D_OFF();
 }
 
-void FlashLEDs(uint32_t speed, uint8_t times) {
-    NTIME(times * 2) {
-        LED_A_INV();
-        LED_B_INV();
-        LED_C_INV();
-        LED_D_INV();
-        SpinDelay(speed);
-    }
-}
-
 // Determine if a button is double clicked, single clicked,
 // not clicked, or held down (for ms || 1sec)
 // In general, don't use this function unless you expect a
