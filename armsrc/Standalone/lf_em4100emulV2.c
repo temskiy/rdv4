@@ -130,6 +130,7 @@ void RunMod() {
 					// Long press - switch to simulate mode
 					SpinUp(100);
 					SpinOff(100);
+					LED_Slot(selected);
 					state = 2;
 				} else if (button_pressed < 0) {
 					// Click - switch to next slot

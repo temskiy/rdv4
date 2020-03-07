@@ -5,9 +5,10 @@
 // at your option, any later version. See the LICENSE.txt file for the text of
 // the license.
 //-----------------------------------------------------------------------------
-// LF emul V2 - This mode can simulate tag ID from selected slot and read tag ID
-//              to selected slot and to flash (only RDV4). Also you can set 
-//              predefined IDs in any slot.
+// LF emul V3 - This mode can simulate ID from selected slot, read ID to 
+//              selected slot, write from selected slot to T5555 tag and store 
+//              readed ID to flash (only RDV4). Also you can set predefined IDs
+//              in any slot. 
 //              To recall stored ID from flash execute:
 //                  mem dump o offset l 5 p
 //              where offset = 5 * selected slot
@@ -33,7 +34,7 @@
 // low & high - array for storage IDs. Its length must be equal.
 // Predefined IDs must be stored in low[]. 
 // In high[] must be nulls
-uint64_t low[] = {0x565AF781C7,0x540053E4E2,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+uint64_t low[] = {0x565AF781C7,0x540053E4E2,0x1234567890,0,0,0,0,0,0,0,0,0,0,0,0,0};
 uint32_t high[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 uint8_t *bba,slots_count;
 int buflen;
@@ -111,9 +112,10 @@ void RunMod() {
     StandAloneMode();
     FpgaDownloadAndGo(FPGA_BITSTREAM_LF);
 	int selected = 0;
-	//state 0 - select slot,
+	//state 0 - select slot
 	//      1 - read tag to selected slot, 
 	//      2 - simulate tag from selected slot
+	//      3 - write to T5555 tag
 	uint8_t state = 0; 
 	slots_count = sizeof(low)/sizeof(low[0]);
 	bba = BigBuf_get_addr();
@@ -130,6 +132,7 @@ void RunMod() {
 					// Long press - switch to simulate mode
 					SpinUp(100);
 					SpinOff(100);
+					LED_Slot(selected);
 					state = 2;
 				} else if (button_pressed < 0) {
 					// Click - switch to next slot
@@ -139,13 +142,22 @@ void RunMod() {
 				} 
 			break;
 			case 1:
-				// Read mode. Click - exit to select mode
-				CmdEM410xdemod(1, &high[selected], &low[selected], 0);
-				FlashLEDs(100,5);
-				#ifdef WITH_FLASH
-				SaveIDtoFlash(selected, low[selected]);
-				#endif
-				state = 0;
+				// Read mode.
+				if (button_pressed > 0) {
+					// Long press - switch to read mode
+					SpinUp(100);
+					SpinOff(10);
+					LED_Slot(selected);
+					state = 3;
+				} else if (button_pressed < 0) {
+					// Click - exit to select mode
+					CmdEM410xdemod(1, &high[selected], &low[selected], 0);
+					FlashLEDs(100,5);
+					#ifdef WITH_FLASH
+					SaveIDtoFlash(selected, low[selected]);
+					#endif
+					state = 0;
+				}
 			break;
 			case 2:
 				// Simulate mode
@@ -161,6 +173,21 @@ void RunMod() {
 					ConstructEM410xEmulBuf(ReversQuads(low[selected]));
 					FlashLEDs(100,5);
 					SimulateTagLowFrequency(buflen, 0, 1);
+					LED_Slot(selected);
+					state = 0; // Switch to select mode
+				}
+			break;
+			case 3:
+				// Write tag mode
+				if (button_pressed > 0) {
+					// Long press - switch to select mode
+					SpinDown(100);
+					SpinOff(10);
+					LED_Slot(selected);
+					state = 0;
+				} else if (button_pressed < 0) {
+					// Click - write ID to tag
+					WriteEM410x(0, (uint32_t) (low[selected] >> 32), (uint32_t) (low[selected] & 0xffffffff));
 					LED_Slot(selected);
 					state = 0; // Switch to select mode
 				}
